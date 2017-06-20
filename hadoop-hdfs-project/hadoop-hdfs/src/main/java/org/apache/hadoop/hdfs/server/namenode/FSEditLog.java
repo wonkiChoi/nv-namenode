@@ -171,7 +171,7 @@ public class FSEditLog implements LogsPurgeable {
   // is an automatic sync scheduled?
   private volatile boolean isAutoSyncScheduled = false;
   
-  private int nvram_enabled;
+  private boolean nvram_enabled;
   
   // these are statistics counters.
   private long numTransactions;        // number of transactions
@@ -242,7 +242,7 @@ public class FSEditLog implements LogsPurgeable {
     this.sharedEditsDirs = FSNamesystem.getSharedEditsDirs(conf);
   }
   
-  FSEditLog(Configuration conf, NNStorage storage, List<URI> editsDirs, int nvram_enabled) {
+  FSEditLog(Configuration conf, NNStorage storage, List<URI> editsDirs, boolean nvram_enabled) {
 	    isSyncRunning = false;
 	    this.conf = conf;
 	    this.storage = storage;
@@ -595,7 +595,7 @@ public class FSEditLog implements LogsPurgeable {
    */
   public void logSync() {
     long syncStart = 0;
-    if(this.nvram_enabled == 0) {
+    if(this.nvram_enabled == false) {
     // Fetch the transactionId of this thread. 
     long mytxid = myTransactionId.get().txid;
     
@@ -661,7 +661,10 @@ public class FSEditLog implements LogsPurgeable {
       long start = monotonicNow();
       try {
         if (logStream != null) {
+        	long flushtime = monotonicNow();
           logStream.flush();
+          long flushend = monotonicNow() - flushtime;
+          LOG.info("[INFO] LOGSYNC ELAPSED TIME in logSync() : " + txid + " : " + flushend);
         }
       } catch (IOException ex) {
         synchronized (this) {
@@ -676,7 +679,7 @@ public class FSEditLog implements LogsPurgeable {
         }
       }
       long elapsed = monotonicNow() - start;
-  
+      //LOG.info("[INFO] LOGSYNC ELAPSED TIME in logSync() : " + txid + " : " + elapsed);
       if (metrics != null) { // Metrics non-null only when used inside name node
         metrics.addSync(elapsed);
       }
@@ -779,6 +782,7 @@ public class FSEditLog implements LogsPurgeable {
       op.setXAttrs(x.getXAttrs());
     }
 
+    LOG.info("PATH" + path +"logOpenFile called");
     logRpcIds(op, toLogRpcIds);
     logEdit(op);
   }
@@ -795,7 +799,7 @@ public class FSEditLog implements LogsPurgeable {
       .setBlockSize(newNode.getPreferredBlockSize())
       .setBlocks(newNode.getBlocks())
       .setPermissionStatus(newNode.getPermissionStatus());
-    
+    LOG.info("PATH" + path + "logCloseFile called");
     logEdit(op);
   }
   
@@ -807,6 +811,7 @@ public class FSEditLog implements LogsPurgeable {
     BlockInfoContiguous lastBlock = blocks[blocks.length - 1];
     AddBlockOp op = AddBlockOp.getInstance(cache.get()).setPath(path)
         .setPenultimateBlock(pBlock).setLastBlock(lastBlock);
+    LOG.info("PATH" + path + "logAddBlock called");
     logEdit(op);
   }
   
@@ -839,6 +844,7 @@ public class FSEditLog implements LogsPurgeable {
     if (x != null) {
       op.setXAttrs(x.getXAttrs());
     }
+    LOG.info("PATH" + path + "logMkDir called");
     logEdit(op);
   }
   

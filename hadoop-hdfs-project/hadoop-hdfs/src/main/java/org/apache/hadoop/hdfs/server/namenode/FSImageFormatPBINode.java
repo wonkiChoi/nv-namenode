@@ -289,8 +289,9 @@ public final class FSImageFormatPBINode {
             + " change the name of the existing file or directory to another "
             + "name before upgrading to this release.");
       }
+      boolean nvram_enabled = dir.getEnabled();
       // NOTE: This does not update space counts for parents
-      if (!parent.addChild(child)) {
+      if (!parent.addChild(child, nvram_enabled)) {
         return;
       }
       dir.cacheName(child);

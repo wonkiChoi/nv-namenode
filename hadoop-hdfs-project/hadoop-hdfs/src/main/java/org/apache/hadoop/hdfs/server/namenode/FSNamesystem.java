@@ -854,7 +854,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     }
   }
 
- FSNamesystem(Configuration conf, FSImage fsImage, boolean ignoreRetryCache, int nvram_enabled)
+ FSNamesystem(Configuration conf, FSImage fsImage, boolean ignoreRetryCache, boolean nvram_enabled)
 	      throws IOException {
 	    provider = DFSUtil.createKeyProviderCryptoExtension(conf);
 	    if (provider == null) {
@@ -1112,6 +1112,13 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
 
       startOpt = StartupOption.REGULAR;
     }
+    if (startOpt == StartupOption.NVRAM) {
+        
+        fsImage.format_nvram(this, fsImage.getStorage().determineClusterId());// reuse current id
+
+        startOpt = StartupOption.REGULAR;
+      }
+    
     boolean success = false;
     writeLock();
     try {
@@ -3171,7 +3178,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
    */
   LocatedBlock getAdditionalBlock(String src, long fileId, String clientName,
       ExtendedBlock previous, Set<Node> excludedNodes, 
-      List<String> favoredNodes, int nvram_enabled) throws IOException, ClassNotFoundException {
+      List<String> favoredNodes) throws IOException {
     LocatedBlock[] onRetryBlock = new LocatedBlock[1];
     DatanodeStorageInfo targets[] = getNewBlockTargets(src, fileId,
         clientName, previous, excludedNodes, favoredNodes, onRetryBlock);
@@ -3181,7 +3188,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       return onRetryBlock[0];
     }
     LocatedBlock newBlock = storeAllocatedBlock(
-        src, fileId, clientName, previous, targets, nvram_enabled);
+        src, fileId, clientName, previous, targets);
     return newBlock;
   }
 
@@ -3196,7 +3203,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
    */
   DatanodeStorageInfo[] getNewBlockTargets(String src, long fileId,
       String clientName, ExtendedBlock previous, Set<Node> excludedNodes,
-      List<String> favoredNodes, LocatedBlock[] onRetryBlock) throws IOException, ClassNotFoundException {
+      List<String> favoredNodes, LocatedBlock[] onRetryBlock) throws IOException {
     final long blockSize;
     final int replication;
     final byte storagePolicyID;
@@ -3262,7 +3269,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
    * the new targets, add it to the INode and to the BlocksMap.
    */
   LocatedBlock storeAllocatedBlock(String src, long fileId, String clientName,
-      ExtendedBlock previous, DatanodeStorageInfo[] targets, int nvram_enabled) throws IOException, ClassNotFoundException {
+      ExtendedBlock previous, DatanodeStorageInfo[] targets) throws IOException {
     Block newBlock = null;
     long offset;
     checkOperation(OperationCategory.WRITE);
@@ -3301,7 +3308,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       INodesInPath inodesInPath = INodesInPath.fromINode(pendingFile);
       saveAllocatedBlock(src, inodesInPath, newBlock, targets);
 
-      if(nvram_enabled == 0) {
+      if(this.dir.nvram_enabled == false) {
     	  persistNewBlock(src, pendingFile); 
       }
       offset = pendingFile.computeFileSize();
@@ -3349,7 +3356,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
                                 String clientName,
                                 ExtendedBlock previous,
                                 LocatedBlock[] onRetryBlock)
-          throws IOException, ClassNotFoundException  {
+          throws IOException {
     assert hasReadLock();
 
     checkBlock(previous);
@@ -3459,7 +3466,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       final String[] storageIDs,
       final Set<Node> excludes,
       final int numAdditionalNodes, final String clientName
-      ) throws IOException, ClassNotFoundException {
+      ) throws IOException {
     //check if the feature is enabled
     dtpReplaceDatanodeOnFailure.checkEnabled();
 
@@ -3521,7 +3528,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
    * The client would like to let go of the given block
    */
   boolean abandonBlock(ExtendedBlock b, long fileId, String src, String holder)
-      throws IOException, ClassNotFoundException {
+      throws IOException {
     NameNode.stateChangeLog.debug(
         "BLOCK* NameSystem.abandonBlock: {} of file {}", b, src);
     checkOperation(OperationCategory.WRITE);
@@ -3569,7 +3576,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
   }
 
   private INodeFile checkLease(String src, String holder, INode inode,
-      long fileId) throws LeaseExpiredException, FileNotFoundException, IOException, ClassNotFoundException {
+      long fileId) throws LeaseExpiredException, FileNotFoundException {
     assert hasReadLock();
     final String ident = src + " (inode " + fileId + ")";
     if (inode == null) {
@@ -3616,7 +3623,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
    */
   boolean completeFile(final String srcArg, String holder,
                        ExtendedBlock last, long fileId)
-    throws SafeModeException, UnresolvedLinkException, IOException, ClassNotFoundException {
+    throws SafeModeException, UnresolvedLinkException, IOException {
     String src = srcArg;
     NameNode.stateChangeLog.debug("DIR* NameSystem.completeFile: {} for {}",
         src, holder);
@@ -3645,7 +3652,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
   }
 
   private boolean completeFileInternal(String src, String holder, Block last,
-      long fileId) throws IOException, ClassNotFoundException {
+      long fileId) throws IOException {
     assert hasWriteLock();
     final INodeFile pendingFile;
     final INodesInPath iip;
@@ -4118,7 +4125,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
    * @throws IOException if path does not exist
    */
   void fsync(String src, long fileId, String clientName, long lastBlockLength)
-      throws IOException, ClassNotFoundException {
+      throws IOException {
     NameNode.stateChangeLog.info("BLOCK* fsync: " + src + " for " + clientName);
     checkOperation(OperationCategory.WRITE);
     byte[][] pathComponents = FSDirectory.getPathComponentsForReservedPath(src);
@@ -4400,7 +4407,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
   void commitBlockSynchronization(ExtendedBlock oldBlock,
       long newgenerationstamp, long newlength,
       boolean closeFile, boolean deleteblock, DatanodeID[] newtargets,
-      String[] newtargetstorages) throws IOException, ClassNotFoundException {
+      String[] newtargetstorages) throws IOException {
     LOG.info("commitBlockSynchronization(oldBlock=" + oldBlock
              + ", newgenerationstamp=" + newgenerationstamp
              + ", newlength=" + newlength
@@ -6337,7 +6344,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     return blockId;
   }
 
-  private boolean isFileDeleted(INodeFile file) throws IOException, ClassNotFoundException {
+  private boolean isFileDeleted(INodeFile file) {
     // Not in the inodeMap or in the snapshot but marked deleted.
     if (dir.getInode(file.getId()) == null) {
       return true;
@@ -6351,9 +6358,10 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       if (tmpParent == null) {
         return true;
       }
+      boolean nvram_enabled = dir.getEnabled(); 
 
       INode childINode = tmpParent.getChild(tmpChild.getLocalNameBytes(),
-          Snapshot.CURRENT_STATE_ID, dir.nvram_enabled);
+          Snapshot.CURRENT_STATE_ID, nvram_enabled);
       if (childINode == null || !childINode.equals(tmpChild)) {
         // a newly created INode with the same name as an already deleted one
         // would be a different INode than the deleted one
@@ -6376,7 +6384,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
   }
 
   private INodeFile checkUCBlock(ExtendedBlock block,
-      String clientName) throws IOException, ClassNotFoundException {
+      String clientName) throws IOException {
     assert hasWriteLock();
     checkNameNodeSafeMode("Cannot get a new generation stamp and an "
         + "access token for block " + block);
@@ -6445,7 +6453,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
    * @throws IOException if any error occurs
    */
   LocatedBlock updateBlockForPipeline(ExtendedBlock block, 
-      String clientName) throws IOException, ClassNotFoundException {
+      String clientName) throws IOException {
     LocatedBlock locatedBlock;
     checkOperation(OperationCategory.WRITE);
     writeLock();
@@ -6479,7 +6487,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
   void updatePipeline(
       String clientName, ExtendedBlock oldBlock, ExtendedBlock newBlock,
       DatanodeID[] newNodes, String[] newStorageIDs, boolean logRetryCache)
-      throws IOException, ClassNotFoundException {
+      throws IOException {
     LOG.info("updatePipeline(" + oldBlock.getLocalBlock()
              + ", newGS=" + newBlock.getGenerationStamp()
              + ", newLength=" + newBlock.getNumBytes()
@@ -6506,7 +6514,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
   private void updatePipelineInternal(String clientName, ExtendedBlock oldBlock,
       ExtendedBlock newBlock, DatanodeID[] newNodes, String[] newStorageIDs,
       boolean logRetryCache)
-      throws IOException, ClassNotFoundException {
+      throws IOException {
     assert hasWriteLock();
     // check the vadility of the block and lease holder name
     final INodeFile pendingFile = checkUCBlock(oldBlock, clientName);

@@ -211,7 +211,11 @@ public class INodeDirectory extends INodeWithAdditionalFields
     return q;
   }
 
-  int searchChildren(byte[] name, int nvram_enabled) {
+  int searchChildren(byte[] name) {
+    return children == null? -1: Collections.binarySearch(children, name);
+  }
+  
+  int searchChildren(byte[] name, boolean nvram_enabled) {
 /*	 TODO: NVRAM INODE is stored incrementally by time
  *  if (nvram_enabled == 1) {
 		  return 
@@ -328,7 +332,7 @@ public class INodeDirectory extends INodeWithAdditionalFields
   public void replaceChild(INode oldChild, final INode newChild,
       final INodeMap inodeMap) {
     Preconditions.checkNotNull(children);
-    final int i = searchChildren(newChild.getLocalNameBytes(),0);
+    final int i = searchChildren(newChild.getLocalNameBytes());
     Preconditions.checkState(i >= 0);
     Preconditions.checkState(oldChild == children.get(i)
         || oldChild == children.get(i).asReference().getReferredINode()
@@ -377,7 +381,7 @@ public class INodeDirectory extends INodeWithAdditionalFields
   }
 
   @Override
-  public void recordModification(int latestSnapshotId) throws ClassNotFoundException, IOException {
+  public void recordModification(int latestSnapshotId) {
     if (isInLatestSnapshot(latestSnapshotId)
         && !shouldRecordInSrcSnapshot(latestSnapshotId)) {
       // add snapshot feature if necessary
@@ -398,7 +402,7 @@ public class INodeDirectory extends INodeWithAdditionalFields
  * @throws ClassNotFoundException 
    */
   public INode saveChild2Snapshot(final INode child, final int latestSnapshotId,
-      final INode snapshotCopy) throws ClassNotFoundException, IOException {
+      final INode snapshotCopy) {
     if (latestSnapshotId == Snapshot.CURRENT_STATE_ID) {
       return child;
     }
@@ -419,11 +423,10 @@ public class INodeDirectory extends INodeWithAdditionalFields
    *          the current directory.
    * @return the child inode.
  * @throws IOException 
- * @throws ClassNotFoundException 
    */
-  public INode getChild(byte[] name, int snapshotId, int nvram_enabled) throws ClassNotFoundException, IOException {
+  public INode getChild(byte[] name, int snapshotId, boolean nvram_enabled) {
     DirectoryWithSnapshotFeature sf;
-    if(nvram_enabled == 1 ) {
+    if( nvram_enabled == true ) {
     	byte[] temp_name = null;
     	INode inode = null;
     	int index = 0;
@@ -432,7 +435,12 @@ public class INodeDirectory extends INodeWithAdditionalFields
 	    	int size = children_for_nvram.getInt(index);
 	    	byte[] byte_for_inode = null;
 	    	children_for_nvram.get(byte_for_inode, children_for_nvram.position(), size );
-	    	inode = (INode) BytesUtil.toObject(byte_for_inode);
+	    	try {
+				inode = (INode) BytesUtil.toObject(byte_for_inode);
+			} catch (ClassNotFoundException | IOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
 	    	temp_name = inode.getLocalNameBytes();
     	}
 
@@ -449,6 +457,18 @@ public class INodeDirectory extends INodeWithAdditionalFields
     return sf.getChild(this, name, snapshotId, nvram_enabled);
     }
   }
+  
+  public INode getChild(byte[] name, int snapshotId) {
+	    DirectoryWithSnapshotFeature sf;
+	    if (snapshotId == Snapshot.CURRENT_STATE_ID || 
+	        (sf = getDirectoryWithSnapshotFeature()) == null) {
+	      ReadOnlyList<INode> c = getCurrentChildrenList();
+	      final int i = ReadOnlyList.Util.binarySearch(c, name);
+	      return i < 0 ? null : c.get(i);
+	    }
+	    
+	    return sf.getChild(this, name, snapshotId);
+  }
 
   /**
    * Search for the given INode in the children list and the deleted lists of
@@ -460,9 +480,8 @@ public class INodeDirectory extends INodeWithAdditionalFields
  * @throws IOException 
  * @throws ClassNotFoundException 
    */
-  public int searchChild(INode inode) throws ClassNotFoundException, IOException {
-	  int nvram_enabled = 0;
-    INode child = getChild(inode.getLocalNameBytes(), Snapshot.CURRENT_STATE_ID, nvram_enabled);
+  public int searchChild(INode inode) {
+    INode child = getChild(inode.getLocalNameBytes(), Snapshot.CURRENT_STATE_ID);
     if (child != inode) {
       // inode is not in parent's children list, thus inode must be in
       // snapshot. identify the snapshot id and later add it into the path
@@ -521,7 +540,7 @@ public class INodeDirectory extends INodeWithAdditionalFields
  * @throws IOException 
  * @throws ClassNotFoundException 
    */
-  public boolean removeChild(INode child, int latestSnapshotId) throws ClassNotFoundException, IOException {
+  public boolean removeChild(INode child, int latestSnapshotId) {
     if (isInLatestSnapshot(latestSnapshotId)) {
       // create snapshot feature if necessary
       DirectoryWithSnapshotFeature sf = this.getDirectoryWithSnapshotFeature();
@@ -542,7 +561,7 @@ public class INodeDirectory extends INodeWithAdditionalFields
    * @return true if the child is removed; false if the child is not found.
    */
   public boolean removeChild(final INode child) {
-    final int i = searchChildren(child.getLocalNameBytes(),0);
+    final int i = searchChildren(child.getLocalNameBytes());
     if (i < 0) {
       return false;
     }
@@ -562,10 +581,9 @@ public class INodeDirectory extends INodeWithAdditionalFields
    * @return false if the child with this name already exists; 
    *         otherwise, return true;
  * @throws IOException 
- * @throws ClassNotFoundException 
    */
   public boolean addChild(INode node, final boolean setModTime,
-      final int latestSnapshotId, int nvram_enabled) throws IOException, ClassNotFoundException {
+      final int latestSnapshotId, boolean nvram_enabled) throws QuotaExceededException {
     final int low = searchChildren(node.getLocalNameBytes(), nvram_enabled);
     if (low >= 0) {
       return false;
@@ -585,8 +603,30 @@ public class INodeDirectory extends INodeWithAdditionalFields
     }
     return true;
   }
+  
+  public boolean addChild(INode node, final boolean setModTime,
+	      final int latestSnapshotId) throws QuotaExceededException {
+	    final int low = searchChildren(node.getLocalNameBytes());
+	    if (low >= 0) {
+	      return false;
+	    }
+	    if (isInLatestSnapshot(latestSnapshotId)) {
+	      // create snapshot feature if  necessary
+	      DirectoryWithSnapshotFeature sf = this.getDirectoryWithSnapshotFeature();
+	      if (sf == null) {
+	        sf = this.addSnapshotFeature(null);
+	      }
+	      return sf.addChild(this, node, setModTime, latestSnapshotId);
+	    }
+	    addChild(node, low);
+	    if (setModTime) {
+	      // update modification time of the parent directory
+	      updateModificationTime(node.getModificationTime(), latestSnapshotId);
+	    }
+	    return true;
+	  }
 
-  public boolean addChild(INode node, int nvram_enabled) throws IOException {
+  public boolean addChild(INode node, boolean nvram_enabled) {
     final int low = searchChildren(node.getLocalNameBytes(), nvram_enabled);
     if (low >= 0) {
       return false;
@@ -594,36 +634,45 @@ public class INodeDirectory extends INodeWithAdditionalFields
     addChild(node, low, nvram_enabled);
     return true;
   }
+  
+  public boolean addChild(INode node) {
+	    final int low = searchChildren(node.getLocalNameBytes());
+	    if (low >= 0) {
+	      return false;
+	    }
+	    addChild(node, low);
+	    return true;
+	  }
 
   /**
    * Add the node to the children list at the given insertion point.
    * The basic add method which actually calls children.add(..).
  * @throws IOException 
    */
-  private void addChild(final INode node, final int insertionPoint, int nvram_enabled) throws IOException {
+  private void addChild(final INode node, final int insertionPoint, boolean nvram_enabled) {
     
-	  int last_position=0;
-	  if(nvram_enabled == 1) {
+	  int last_position = 0;
+	  if(nvram_enabled == true) {
 		  if(children_for_nvram == null) {
-			 children_for_nvram = NativeIO.allocateNVRAMBuffer(1024*1024);
+			 try {
+				children_for_nvram = NativeIO.allocateNVRAMBuffer(1024*1024);
+			} catch (NativeIOException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
 			 last_position = children_for_nvram.position();
 			 children_for_nvram.putInt(last_position);
 		  }
 		  children_for_nvram.clear();
 		  last_position = children_for_nvram.getInt();
-		  byte[] inode_byte = BytesUtil.toByteArray(node);
+		  byte[] inode_byte = null;
+		try {
+			inode_byte = BytesUtil.toByteArray(node);
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 		  int size = inode_byte.length;
-//		  INodeFile file = node.asFile();  
-//		  long parent_id = this.getId();
-//		  long id = file.getId();
-//		  byte[] name = file.getLocalNameBytes();
-//		  long permission = file.getPermissionLong();
-//		  long modificationTime = file.getModificationTime();
-//		  long accessTime = node.getAccessTime();
-//		  short replication = file.getFileReplication();
-//		  long preferredBlockSize = file.getPreferredBlockSize();
-//		  int size = name.length;
-		  
 		  
 		  /* [isFile: 0 - directory  1 - file] [size : inode name size] [id : inode id] [name : inode name] [permission] [mode Time] [access Time] */ 
 
@@ -645,6 +694,19 @@ public class INodeDirectory extends INodeWithAdditionalFields
       node.setGroup(getGroupName());
     }
 	  }
+  }
+  
+  private void addChild(final INode node, final int insertionPoint) {
+	
+	  if (children == null) {
+      children = new ArrayList<INode>(DEFAULT_FILES_PER_DIRECTORY);
+    }
+    node.setParent(this);
+    children.add(-insertionPoint - 1, node);
+
+    if (node.getGroupName() == null) {
+      node.setGroup(getGroupName());
+    }
   }
 
   @Override
@@ -787,14 +849,13 @@ public class INodeDirectory extends INodeWithAdditionalFields
    * @throws QuotaExceededException should not throw this exception
    */
   public void undoRename4ScrParent(final INodeReference oldChild,
-      final INode newChild) throws QuotaExceededException, NativeIOException, IOException, ClassNotFoundException {
+      final INode newChild) throws QuotaExceededException {
     DirectoryWithSnapshotFeature sf = getDirectoryWithSnapshotFeature();
     Preconditions.checkState(sf != null,
         "Directory does not have snapshot feature");
     sf.getDiffs().removeChild(ListType.DELETED, oldChild);
     sf.getDiffs().replaceChild(ListType.CREATED, oldChild, newChild);
-    int nvram_enabled = 0;
-    addChild(newChild, true, Snapshot.CURRENT_STATE_ID, nvram_enabled);
+    addChild(newChild, true, Snapshot.CURRENT_STATE_ID);
   }
   
   /**
@@ -804,15 +865,14 @@ public class INodeDirectory extends INodeWithAdditionalFields
    */
   public void undoRename4DstParent(final BlockStoragePolicySuite bsps,
       final INode deletedChild,
-      int latestSnapshotId) throws QuotaExceededException, NativeIOException, IOException, ClassNotFoundException {
+      int latestSnapshotId) throws QuotaExceededException {
     DirectoryWithSnapshotFeature sf = getDirectoryWithSnapshotFeature();
     Preconditions.checkState(sf != null,
         "Directory does not have snapshot feature");
     boolean removeDeletedChild = sf.getDiffs().removeChild(ListType.DELETED,
         deletedChild);
     int sid = removeDeletedChild ? Snapshot.CURRENT_STATE_ID : latestSnapshotId;
-    int nvram_enabled = 0;
-    final boolean added = addChild(deletedChild, true, sid, nvram_enabled);
+    final boolean added = addChild(deletedChild, true, sid);
     // update quota usage if adding is successfully and the old child has not
     // been stored in deleted list before
     if (added && !removeDeletedChild) {

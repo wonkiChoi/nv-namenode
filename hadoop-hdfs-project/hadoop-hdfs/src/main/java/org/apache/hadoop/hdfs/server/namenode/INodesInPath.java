@@ -121,17 +121,11 @@ public class INodesInPath {
    *        be thrown when the path refers to a symbolic link.
    * @return the specified number of existing INodes in the path
    */
-  static INodesInPath resolve(final INodeDirectory startingDir, ByteBuffer rootDir,
-      final byte[][] components, final boolean resolveLink, int nvram_enabled)
-      throws UnresolvedLinkException, ClassNotFoundException, IOException {
+  static INodesInPath resolve(final INodeDirectory startingDir, final byte[][] components, final boolean resolveLink)
+      throws UnresolvedLinkException {
     Preconditions.checkArgument(startingDir.compareTo(components[0]) == 0);
 
-    INode curNode = null;
-    if(nvram_enabled == 1) {
-    	curNode = (INode) BytesUtil.toObject(rootDir.array());
-    } else {
-     curNode = startingDir;
-         }
+    INode curNode = startingDir;
     int count = 0;
     int inodeNum = 0;
     INode[] inodes = new INode[components.length];
@@ -217,7 +211,7 @@ public class INodesInPath {
       } else {
         // normal case, and also for resolving file/dir under snapshot root
         curNode = dir.getChild(childName,
-            isSnapshot ? snapshotId : CURRENT_STATE_ID, nvram_enabled);
+            isSnapshot ? snapshotId : CURRENT_STATE_ID);
       }
       count++;
     }
@@ -235,6 +229,121 @@ public class INodesInPath {
     return snapshotId == CURRENT_STATE_ID || (sid != CURRENT_STATE_ID &&
         ID_INTEGER_COMPARATOR.compare(snapshotId, sid) < 0);
   }
+
+  static INodesInPath resolve(final INodeDirectory startingDir, ByteBuffer rootDir,
+	      final byte[][] components, final boolean resolveLink, boolean nvram_enabled)
+	      throws UnresolvedLinkException {
+	    Preconditions.checkArgument(startingDir.compareTo(components[0]) == 0);
+
+	    INode curNode = null;
+	    if(nvram_enabled == true) {
+	    	try {
+	    	curNode = (INode) BytesUtil.toObject(rootDir.array());
+	    	} catch (IOException | ClassNotFoundException ce) {
+				// TODO Auto-generated catch block
+				ce.printStackTrace();
+			}
+	    } else {
+	     curNode = startingDir;
+	         }
+	    int count = 0;
+	    int inodeNum = 0;
+	    INode[] inodes = new INode[components.length];
+	    boolean isSnapshot = false;
+	    int snapshotId = CURRENT_STATE_ID;
+
+	    while (count < components.length && curNode != null) {
+	      final boolean lastComp = (count == components.length - 1);
+	      inodes[inodeNum++] = curNode;
+	      final boolean isRef = curNode.isReference();
+	      final boolean isDir = curNode.isDirectory();
+	      final INodeDirectory dir = isDir? curNode.asDirectory(): null;
+	      if (!isRef && isDir && dir.isWithSnapshot()) {
+	        //if the path is a non-snapshot path, update the latest snapshot.
+	        if (!isSnapshot && shouldUpdateLatestId(
+	            dir.getDirectoryWithSnapshotFeature().getLastSnapshotId(),
+	            snapshotId)) {
+	          snapshotId = dir.getDirectoryWithSnapshotFeature().getLastSnapshotId();
+	        }
+	      } else if (isRef && isDir && !lastComp) {
+	        // If the curNode is a reference node, need to check its dstSnapshot:
+	        // 1. if the existing snapshot is no later than the dstSnapshot (which
+	        // is the latest snapshot in dst before the rename), the changes 
+	        // should be recorded in previous snapshots (belonging to src).
+	        // 2. however, if the ref node is already the last component, we still 
+	        // need to know the latest snapshot among the ref node's ancestors, 
+	        // in case of processing a deletion operation. Thus we do not overwrite
+	        // the latest snapshot if lastComp is true. In case of the operation is
+	        // a modification operation, we do a similar check in corresponding 
+	        // recordModification method.
+	        if (!isSnapshot) {
+	          int dstSnapshotId = curNode.asReference().getDstSnapshotId();
+	          if (snapshotId == CURRENT_STATE_ID || // no snapshot in dst tree of rename
+	              (dstSnapshotId != CURRENT_STATE_ID &&
+	               dstSnapshotId >= snapshotId)) { // the above scenario
+	            int lastSnapshot = CURRENT_STATE_ID;
+	            DirectoryWithSnapshotFeature sf;
+	            if (curNode.isDirectory() && 
+	                (sf = curNode.asDirectory().getDirectoryWithSnapshotFeature()) != null) {
+	              lastSnapshot = sf.getLastSnapshotId();
+	            }
+	            snapshotId = lastSnapshot;
+	          }
+	        }
+	      }
+	      if (curNode.isSymlink() && (!lastComp || resolveLink)) {
+	        final String path = constructPath(components, 0, components.length);
+	        final String preceding = constructPath(components, 0, count);
+	        final String remainder =
+	          constructPath(components, count + 1, components.length);
+	        final String link = DFSUtil.bytes2String(components[count]);
+	        final String target = curNode.asSymlink().getSymlinkString();
+	        if (LOG.isDebugEnabled()) {
+	          LOG.debug("UnresolvedPathException " +
+	            " path: " + path + " preceding: " + preceding +
+	            " count: " + count + " link: " + link + " target: " + target +
+	            " remainder: " + remainder);
+	        }
+	        throw new UnresolvedPathException(path, preceding, remainder, target);
+	      }
+	      if (lastComp || !isDir) {
+	        break;
+	      }
+	      final byte[] childName = components[count + 1];
+	      
+	      // check if the next byte[] in components is for ".snapshot"
+	      if (isDotSnapshotDir(childName) && dir.isSnapshottable()) {
+	        // skip the ".snapshot" in components
+	        count++;
+	        isSnapshot = true;
+	        // check if ".snapshot" is the last element of components
+	        if (count == components.length - 1) {
+	          break;
+	        }
+	        // Resolve snapshot root
+	        final Snapshot s = dir.getSnapshot(components[count + 1]);
+	        if (s == null) {
+	          curNode = null; // snapshot not found
+	        } else {
+	          curNode = s.getRoot();
+	          snapshotId = s.getId();
+	        }
+	      } else {
+	        // normal case, and also for resolving file/dir under snapshot root
+	        curNode = dir.getChild(childName,
+	            isSnapshot ? snapshotId : CURRENT_STATE_ID, nvram_enabled);
+	      }
+	      count++;
+	    }
+	    if (isSnapshot && !isDotSnapshotDir(components[components.length - 1])) {
+	      // for snapshot path shrink the inode array. however, for path ending with
+	      // .snapshot, still keep last the null inode in the array
+	      INode[] newNodes = new INode[components.length - 1];
+	      System.arraycopy(inodes, 0, newNodes, 0, newNodes.length);
+	      inodes = newNodes;
+	    }
+	    return new INodesInPath(inodes, components, isSnapshot, snapshotId);
+	  }
 
   /**
    * Replace an inode of the given INodesInPath in the given position. We do a

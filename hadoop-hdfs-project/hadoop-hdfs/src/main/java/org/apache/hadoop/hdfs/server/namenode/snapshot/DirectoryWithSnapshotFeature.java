@@ -277,7 +277,7 @@ public class DirectoryWithSnapshotFeature implements INode.Feature {
      * @throws IOException 
      * @throws ClassNotFoundException */
     INode getChild(byte[] name, boolean checkPosterior,
-        INodeDirectory currentDir) throws ClassNotFoundException, IOException {
+        INodeDirectory currentDir) {
       for(DirectoryDiff d = this; ; d = d.getPosterior()) {
         final Container<INode> returned = d.diff.accessPrevious(name);
         if (returned != null) {
@@ -288,8 +288,7 @@ public class DirectoryWithSnapshotFeature implements INode.Feature {
           return null;
         } else if (d.getPosterior() == null) {
           // no more posterior diff, get from current inode.
-        	 int nvram_enabled = 0;
-          return currentDir.getChild(name, Snapshot.CURRENT_STATE_ID, nvram_enabled);
+          return currentDir.getChild(name, Snapshot.CURRENT_STATE_ID);
         }
       }
     }
@@ -561,9 +560,10 @@ public class DirectoryWithSnapshotFeature implements INode.Feature {
   /**
    * Add an inode into parent's children list. The caller of this method needs
    * to make sure that parent is in the given snapshot "latest".
+ * @throws IOException 
    */
   public boolean addChild(INodeDirectory parent, INode inode,
-      boolean setModTime, int latestSnapshotId, int nvram_enabled) throws QuotaExceededException, NativeIOException, IOException {
+      boolean setModTime, int latestSnapshotId, boolean nvram_enabled) throws QuotaExceededException {
     ChildrenDiff diff = diffs.checkAndAddLatestSnapshotDiff(latestSnapshotId,
         parent).diff;
     int undoInfo = diff.create(inode);
@@ -576,6 +576,19 @@ public class DirectoryWithSnapshotFeature implements INode.Feature {
     return added;
   }
 
+  public boolean addChild(INodeDirectory parent, INode inode,
+	      boolean setModTime, int latestSnapshotId) throws QuotaExceededException {
+	    ChildrenDiff diff = diffs.checkAndAddLatestSnapshotDiff(latestSnapshotId,
+	        parent).diff;
+	    int undoInfo = diff.create(inode);
+
+	    final boolean added = parent.addChild(inode, setModTime,
+	        Snapshot.CURRENT_STATE_ID);
+	    if (!added) {
+	      diff.undoCreate(inode, undoInfo);
+	    }
+	    return added;
+	  }
   /**
    * Remove an inode from parent's children list. The caller of this method
    * needs to make sure that parent is in the given snapshot "latest".
@@ -619,15 +632,22 @@ public class DirectoryWithSnapshotFeature implements INode.Feature {
   }
   
   public INode getChild(INodeDirectory currentINode, byte[] name,
-      int snapshotId, int nvram_enabled) throws ClassNotFoundException, IOException {
+      int snapshotId, boolean nvram_enabled) {
     final DirectoryDiff diff = diffs.getDiffById(snapshotId);
     return diff != null ? diff.getChild(name, true, currentINode)
         : currentINode.getChild(name, Snapshot.CURRENT_STATE_ID, nvram_enabled);
   }
   
+  public INode getChild(INodeDirectory currentINode, byte[] name,
+	      int snapshotId) {
+	    final DirectoryDiff diff = diffs.getDiffById(snapshotId);
+	    return diff != null ? diff.getChild(name, true, currentINode)
+	        : currentINode.getChild(name, Snapshot.CURRENT_STATE_ID);
+	  }
+  
   /** Used to record the modification of a symlink node */
   public INode saveChild2Snapshot(INodeDirectory currentINode,
-      final INode child, final int latestSnapshotId, final INode snapshotCopy) throws IOException, ClassNotFoundException {
+      final INode child, final int latestSnapshotId, final INode snapshotCopy) {
     Preconditions.checkArgument(!child.isDirectory(),
         "child is a directory, child=%s", child);
     Preconditions.checkArgument(latestSnapshotId != Snapshot.CURRENT_STATE_ID);

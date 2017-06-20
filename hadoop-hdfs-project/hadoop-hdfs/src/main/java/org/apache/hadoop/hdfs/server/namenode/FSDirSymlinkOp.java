@@ -89,7 +89,8 @@ class FSDirSymlinkOp {
     final INodeSymlink symlink = new INodeSymlink(id, null, perm, mtime, atime,
         target);
     symlink.setLocalName(localName);
-    return fsd.addINode(iip, symlink) != null ? symlink : null;
+    boolean nvram_enabled = fsd.getEnabled();
+    return fsd.addINode(iip, symlink, nvram_enabled) != null ? symlink : null;
   }
 
   /**

@@ -334,6 +334,7 @@ public class NNBenchWithoutMR {
     int exceptions = 0;
     barrier(); // wait for coordinated start time
     execTime = new Date();
+    //long startMil = System.currentTimeMillis();
     System.out.println("Job started: " + startTime);
     if (operation.equals("createWrite")) {
       if (!fileSys.mkdirs(taskDir)) {
@@ -350,10 +351,12 @@ public class NNBenchWithoutMR {
       System.err.println(usage);
       System.exit(-1);
     }
+    //long endMil = System.currentTimeMillis();
+    //long elapse = endMil - startMil;
     endTime = new Date();
     System.out.println("Job ended: " + endTime);
-    duration = (endTime.getTime() - execTime.getTime()) /1000;
-    System.out.println("The " + operation + " job took " + duration + " seconds.");
+    duration = (endTime.getTime() - execTime.getTime());
+    System.out.println("The " + operation + " job took " + duration + " milliseconds.");
     System.out.println("The job recorded " + exceptions + " exceptions.");
   }
 }

@@ -175,7 +175,7 @@ class FSDirMkdirOp {
   static void mkdirForEditLog(FSDirectory fsd, long inodeId, String src,
       PermissionStatus permissions, List<AclEntry> aclEntries, long timestamp)
       throws QuotaExceededException, UnresolvedLinkException, AclException,
-      FileAlreadyExistsException, NativeIOException {
+      FileAlreadyExistsException {
     assert fsd.hasWriteLock();
     INodesInPath iip = fsd.getINodesInPath(src, false);
     final byte[] localName = iip.getLastLocalName();
@@ -226,7 +226,7 @@ class FSDirMkdirOp {
   private static INodesInPath unprotectedMkdir(FSDirectory fsd, long inodeId,
       INodesInPath parent, byte[] name, PermissionStatus permission,
       List<AclEntry> aclEntries, long timestamp)
-      throws QuotaExceededException, AclException, FileAlreadyExistsException, NativeIOException {
+      throws QuotaExceededException, AclException, FileAlreadyExistsException {
     assert fsd.hasWriteLock();
     assert parent.getLastINode() != null;
     if (!parent.getLastINode().isDirectory()) {
@@ -236,7 +236,8 @@ class FSDirMkdirOp {
     final INodeDirectory dir = new INodeDirectory(inodeId, name, permission,
         timestamp);
 
-    INodesInPath iip = fsd.addLastINode(parent, dir, true, fsd.nvram_enabled);
+    boolean nvram_enabled = fsd.getEnabled();
+    INodesInPath iip = fsd.addLastINode(parent, dir, true, nvram_enabled);
     if (iip != null && aclEntries != null) {
       AclStorage.updateINodeAcl(dir, aclEntries, Snapshot.CURRENT_STATE_ID);
     }

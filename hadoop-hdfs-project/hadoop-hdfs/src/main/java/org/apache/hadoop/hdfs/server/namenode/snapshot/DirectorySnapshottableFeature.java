@@ -169,7 +169,7 @@ public class DirectorySnapshottableFeature extends DirectoryWithSnapshotFeature 
 
   /** Add a snapshot. */
   public Snapshot addSnapshot(INodeDirectory snapshotRoot, int id, String name)
-      throws SnapshotException, QuotaExceededException, ClassNotFoundException, IOException {
+      throws SnapshotException, QuotaExceededException {
     //check snapshot quota
     final int n = getNumSnapshots();
     if (n + 1 > snapshotQuota) {
@@ -257,7 +257,7 @@ public class DirectorySnapshottableFeature extends DirectoryWithSnapshotFeature 
  * @throws ClassNotFoundException 
    */
   SnapshotDiffInfo computeDiff(final INodeDirectory snapshotRoot,
-      final String from, final String to) throws ClassNotFoundException, IOException {
+      final String from, final String to) throws SnapshotException {
     Snapshot fromSnapshot = getSnapshotByName(snapshotRoot, from);
     Snapshot toSnapshot = getSnapshotByName(snapshotRoot, to);
     // if the start point is equal to the end point, return null
@@ -305,7 +305,7 @@ public class DirectorySnapshottableFeature extends DirectoryWithSnapshotFeature 
  * @throws IOException 
    */
   private void computeDiffRecursively(final INodeDirectory snapshotRoot,
-      INode node, List<byte[]> parentPath, SnapshotDiffInfo diffReport) throws ClassNotFoundException, IOException {
+      INode node, List<byte[]> parentPath, SnapshotDiffInfo diffReport) {
     final Snapshot earlierSnapshot = diffReport.isFromEarlier() ?
         diffReport.getFrom() : diffReport.getTo();
     final Snapshot laterSnapshot = diffReport.isFromEarlier() ?
@@ -359,7 +359,7 @@ public class DirectorySnapshottableFeature extends DirectoryWithSnapshotFeature 
    * if the rename target is also under the same snapshottable directory.
    */
   private byte[][] findRenameTargetPath(final INodeDirectory snapshotRoot,
-      INodeReference.WithName wn, final int snapshotId) throws ClassNotFoundException, IOException {
+      INodeReference.WithName wn, final int snapshotId) {
     INode inode = wn.getReferredINode();
     final LinkedList<byte[]> ancestors = Lists.newLinkedList();
     while (inode != null) {

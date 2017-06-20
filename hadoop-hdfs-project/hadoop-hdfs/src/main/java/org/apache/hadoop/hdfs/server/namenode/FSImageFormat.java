@@ -673,8 +673,9 @@ public class FSImageFormat {
         child.setLocalName(renameReservedRootComponentOnUpgrade(
             child.getLocalNameBytes(), getLayoutVersion()));
     }
+    boolean nvram_enabled = fsDir.getEnabled();
     // NOTE: This does not update space counts for parents
-    if (!parent.addChild(child)) {
+    if (!parent.addChild(child, nvram_enabled)) {
       return;
     }
     namesystem.dir.cacheName(child);

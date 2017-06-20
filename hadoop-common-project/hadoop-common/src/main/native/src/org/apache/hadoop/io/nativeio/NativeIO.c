@@ -50,13 +50,11 @@
 #include <Windows.h>
 #include "winutils.h"
 #endif
+
 #include "pmc_defines.h"
 #include "pmc_nvram_api_expo.h"
 #include "file_descriptor.h"
 #include "errno_enum.h"
-#include <stdio.h>
-#include <string.h>
-#include <sys/mman.h>
 
 #define MMAP_PROT_READ org_apache_hadoop_io_nativeio_NativeIO_POSIX_MMAP_PROT_READ
 #define MMAP_PROT_WRITE org_apache_hadoop_io_nativeio_NativeIO_POSIX_MMAP_PROT_WRITE

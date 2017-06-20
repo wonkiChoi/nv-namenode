@@ -120,7 +120,7 @@ public class FSDirectory implements Closeable {
     return r;
   }
   
-  private static ByteBuffer createRoot(FSNamesystem namesystem, int nvram_enabled) throws NativeIOException, IOException {
+  private static ByteBuffer createRoot(FSNamesystem namesystem, boolean nvram_enabled) throws NativeIOException, IOException {
 	    ByteBuffer root;
 	    final INodeDirectory r = new INodeDirectory(
 	            INodeId.ROOT_INODE_ID,
@@ -195,10 +195,13 @@ public class FSDirectory implements Closeable {
   private final FSEditLog editLog;
 
   private INodeAttributeProvider attributeProvider;
-  public int nvram_enabled =0;
+  public boolean nvram_enabled;
 
   public void setINodeAttributeProvider(INodeAttributeProvider provider) {
     attributeProvider = provider;
+  }
+  boolean getEnabled() {
+	  return nvram_enabled;
   }
 
   // utility methods to acquire and release read lock and write lock
@@ -328,13 +331,14 @@ public class FSDirectory implements Closeable {
     namesystem = ns;
     this.editLog = ns.getEditLog();
     ezManager = new EncryptionZoneManager(this, conf);
+    this.nvram_enabled = false;
   }
-  FSDirectory(FSNamesystem ns, Configuration conf, int nvram_enabled) throws IOException, NativeIOException {
+  FSDirectory(FSNamesystem ns, Configuration conf, boolean nvram_enabled) throws IOException, NativeIOException {
 	    this.dirLock = new ReentrantReadWriteLock(true); // fair
 	    this.inodeId = new INodeId();
 	    rootDir = createRoot(ns);
 	    inodeMap = INodeMap.newInstance(rootDir);
-	    if(nvram_enabled == 1) {
+	    if(nvram_enabled == true) {
 	       	rootByte = createRoot(ns, nvram_enabled);
    	     inodeByteMap = NativeIO.allocateNVRAMBuffer(4096 * 4096);
 	   	    }
@@ -530,7 +534,7 @@ public class FSDirectory implements Closeable {
       permissions, short replication, long preferredBlockSize,
       String clientName, String clientMachine)
     throws FileAlreadyExistsException, QuotaExceededException,
-      UnresolvedLinkException, SnapshotAccessControlException, AclException, NativeIOException, IOException, ClassNotFoundException {
+      UnresolvedLinkException, SnapshotAccessControlException, AclException {
 
     long modTime = now();
 
@@ -562,7 +566,7 @@ public class FSDirectory implements Closeable {
       PermissionStatus permissions, List<AclEntry> aclEntries,
       List<XAttr> xAttrs, short replication, long modificationTime, long atime,
       long preferredBlockSize, boolean underConstruction, String clientName,
-      String clientMachine, byte storagePolicyId) throws ClassNotFoundException, IOException {
+      String clientMachine, byte storagePolicyId) throws IOException {
     final INodeFile newNode;
     assert hasWriteLock();
     if (underConstruction) {
@@ -576,7 +580,7 @@ public class FSDirectory implements Closeable {
 
     newNode.setLocalName(localName);
     try {
-      INodesInPath iip = addINode(existing, newNode,0);
+      INodesInPath iip = addINode(existing, newNode);
       if (iip != null) {
         if (aclEntries != null) {
           AclStorage.updateINodeAcl(newNode, aclEntries, CURRENT_STATE_ID);
@@ -724,7 +728,7 @@ public class FSDirectory implements Closeable {
   /**
    * Check whether the path specifies a directory
    */
-  boolean isDir(String src) throws UnresolvedLinkException, ClassNotFoundException, IOException {
+  boolean isDir(String src) throws UnresolvedLinkException {
     src = normalizePath(src);
     readLock();
     try {
@@ -765,7 +769,7 @@ public class FSDirectory implements Closeable {
    * when image/edits have been loaded and the file/dir to be deleted is not
    * contained in snapshots.
    */
-  void updateCountForDelete(final INode inode, final INodesInPath iip) throws NativeIOException, IOException, ClassNotFoundException {
+  void updateCountForDelete(final INode inode, final INodesInPath iip) {
     if (getFSNamesystem().isImageLoaded() &&
         !inode.isInLatestSnapshot(iip.getLatestSnapshotId())) {
       QuotaCounts counts = inode.computeQuotaUsage(getBlockStoragePolicySuite());
@@ -953,8 +957,8 @@ public class FSDirectory implements Closeable {
    * if the adding fails.
    * @throws QuotaExceededException is thrown if it violates quota limit
    */
-  INodesInPath addINode(INodesInPath existing, INode child, int nvram_enabled)
-      throws QuotaExceededException, UnresolvedLinkException, NativeIOException, IOException, ClassNotFoundException {
+  INodesInPath addINode(INodesInPath existing, INode child)
+      throws QuotaExceededException, UnresolvedLinkException {
     cacheName(child);
     writeLock();
     try {
@@ -963,6 +967,17 @@ public class FSDirectory implements Closeable {
       writeUnlock();
     }
   }
+  
+  INodesInPath addINode(INodesInPath existing, INode child, boolean nvram_enabled)
+	      throws QuotaExceededException, UnresolvedLinkException {
+	    cacheName(child);
+	    writeLock();
+	    try {
+	      return addLastINode(existing, child, true, nvram_enabled);
+	    } finally {
+	      writeUnlock();
+	    }
+	  }
 
   /**
    * Verify quota for adding or moving a new INode with required 
@@ -1071,7 +1086,62 @@ public class FSDirectory implements Closeable {
    */
   @VisibleForTesting
   public INodesInPath addLastINode(INodesInPath existing, INode inode,
-      boolean checkQuota, int nvram_enabled) throws QuotaExceededException, NativeIOException, IOException, ClassNotFoundException {
+      boolean checkQuota) throws QuotaExceededException {
+    assert existing.getLastINode() != null &&
+        existing.getLastINode().isDirectory();
+
+    final int pos = existing.length();
+    // Disallow creation of /.reserved. This may be created when loading
+    // editlog/fsimage during upgrade since /.reserved was a valid name in older
+    // release. This may also be called when a user tries to create a file
+    // or directory /.reserved.
+    if (pos == 1 && existing.getINode(0) == rootDir && isReservedName(inode)) {
+      throw new HadoopIllegalArgumentException(
+          "File name \"" + inode.getLocalName() + "\" is reserved and cannot "
+              + "be created. If this is during upgrade change the name of the "
+              + "existing file or directory to another name before upgrading "
+              + "to the new release.");
+    }
+    final INodeDirectory parent = existing.getINode(pos - 1).asDirectory();
+    // The filesystem limits are not really quotas, so this check may appear
+    // odd. It's because a rename operation deletes the src, tries to add
+    // to the dest, if that fails, re-adds the src from whence it came.
+    // The rename code disables the quota when it's restoring to the
+    // original location because a quota violation would cause the the item
+    // to go "poof".  The fs limits must be bypassed for the same reason.
+    if (checkQuota) {
+      final String parentPath = existing.getPath();
+      verifyMaxComponentLength(inode.getLocalNameBytes(), parentPath);
+      verifyMaxDirItems(parent, parentPath);
+    }
+    // always verify inode name
+    verifyINodeName(inode.getLocalNameBytes());
+
+    final QuotaCounts counts = inode.computeQuotaUsage(getBlockStoragePolicySuite());
+    updateCount(existing, pos, counts, checkQuota);
+
+    boolean isRename = (inode.getParent() != null);
+    boolean added;
+    try {
+      added = parent.addChild(inode, true, existing.getLatestSnapshotId());
+    } catch (QuotaExceededException e) {
+      updateCountNoQuotaCheck(existing, pos, counts.negation());
+      throw e;
+    }
+    if (!added) {
+      updateCountNoQuotaCheck(existing, pos, counts.negation());
+      return null;
+    } else {
+      if (!isRename) {
+        AclStorage.copyINodeDefaultAcl(inode);
+      }
+      addToInodeMap(inode);
+    }
+    return INodesInPath.append(existing, inode, inode.getLocalNameBytes());
+  }
+  @VisibleForTesting
+  public INodesInPath addLastINode(INodesInPath existing, INode inode,
+      boolean checkQuota, boolean nvram_enabled) throws QuotaExceededException {
     assert existing.getLastINode() != null &&
         existing.getLastINode().isDirectory();
 
@@ -1125,10 +1195,9 @@ public class FSDirectory implements Closeable {
     return INodesInPath.append(existing, inode, inode.getLocalNameBytes());
   }
 
-  INodesInPath addLastINodeNoQuotaCheck(INodesInPath existing, INode i) throws NativeIOException, IOException, ClassNotFoundException {
+  INodesInPath addLastINodeNoQuotaCheck(INodesInPath existing, INode i) {
     try {
-    	int nvram_enabled = 0;
-      return addLastINode(existing, i, false, nvram_enabled);
+      return addLastINode(existing, i, false);
     } catch (QuotaExceededException e) {
       NameNode.LOG.warn("FSDirectory.addChildNoQuotaCheck - unexpected", e);
     }
@@ -1145,7 +1214,7 @@ public class FSDirectory implements Closeable {
    *          1 otherwise.
    */
   @VisibleForTesting
-  public long removeLastINode(final INodesInPath iip) throws ClassNotFoundException, IOException {
+  public long removeLastINode(final INodesInPath iip) {
     final int latestSnapshot = iip.getLatestSnapshotId();
     final INode last = iip.getLastINode();
     final INodeDirectory parent = iip.getINode(-2).asDirectory();
@@ -1184,7 +1253,7 @@ public class FSDirectory implements Closeable {
   void unprotectedTruncate(String src, String clientName, String clientMachine,
                            long newLength, long mtime, Block truncateBlock)
       throws UnresolvedLinkException, QuotaExceededException,
-      SnapshotAccessControlException, IOException, ClassNotFoundException {
+      SnapshotAccessControlException, IOException {
     INodesInPath iip = getINodesInPath(src, true);
     INodeFile file = iip.getLastINode().asFile();
     BlocksMapUpdateInfo collectedBlocks = new BlocksMapUpdateInfo();
@@ -1697,7 +1766,7 @@ public class FSDirectory implements Closeable {
     return path.toString();
   }
 
-  INode getINode4DotSnapshot(String src) throws UnresolvedLinkException, IOException, ClassNotFoundException {
+  INode getINode4DotSnapshot(String src) throws UnresolvedLinkException {
     Preconditions.checkArgument(
         src.endsWith(HdfsConstants.SEPARATOR_DOT_SNAPSHOT_DIR),
         "%s does not end with %s", src, HdfsConstants.SEPARATOR_DOT_SNAPSHOT_DIR);
@@ -1714,7 +1783,7 @@ public class FSDirectory implements Closeable {
   }
 
   INodesInPath getExistingPathINodes(byte[][] components)
-      throws UnresolvedLinkException, IOException, ClassNotFoundException {
+      throws UnresolvedLinkException {
     return INodesInPath.resolve(rootDir, rootByte, components, false, nvram_enabled);
   }
 
@@ -1722,7 +1791,7 @@ public class FSDirectory implements Closeable {
    * Get {@link INode} associated with the file / directory.
    */
   public INodesInPath getINodesInPath4Write(String src)
-      throws UnresolvedLinkException, SnapshotAccessControlException, ClassNotFoundException, IOException {
+      throws UnresolvedLinkException, SnapshotAccessControlException {
     return getINodesInPath4Write(src, true);
   }
 
@@ -1731,27 +1800,27 @@ public class FSDirectory implements Closeable {
    * @throws SnapshotAccessControlException if path is in RO snapshot
    */
   public INode getINode4Write(String src) throws UnresolvedLinkException,
-      SnapshotAccessControlException, ClassNotFoundException, IOException {
+      SnapshotAccessControlException {
     return getINodesInPath4Write(src, true).getLastINode();
   }
 
   /** @return the {@link INodesInPath} containing all inodes in the path. */
   public INodesInPath getINodesInPath(String path, boolean resolveLink)
-      throws UnresolvedLinkException, ClassNotFoundException, IOException {
+      throws UnresolvedLinkException {
     final byte[][] components = INode.getPathComponents(path);
     return INodesInPath.resolve(rootDir, rootByte, components, resolveLink, nvram_enabled);
   }
 
   /** @return the last inode in the path. */
   INode getINode(String path, boolean resolveLink)
-      throws UnresolvedLinkException, ClassNotFoundException, IOException {
+      throws UnresolvedLinkException {
     return getINodesInPath(path, resolveLink).getLastINode();
   }
 
   /**
    * Get {@link INode} associated with the file / directory.
    */
-  public INode getINode(String src) throws UnresolvedLinkException, IOException, ClassNotFoundException {
+  public INode getINode(String src) throws UnresolvedLinkException {
     return getINode(src, true);
   }
 
@@ -1761,7 +1830,7 @@ public class FSDirectory implements Closeable {
    * @throws SnapshotAccessControlException if path is in RO snapshot
    */
   INodesInPath getINodesInPath4Write(String src, boolean resolveLink)
-          throws UnresolvedLinkException, SnapshotAccessControlException, ClassNotFoundException, IOException {
+          throws UnresolvedLinkException, SnapshotAccessControlException {
     final byte[][] components = INode.getPathComponents(src);
     INodesInPath inodesInPath = INodesInPath.resolve(rootDir, rootByte, components,
         resolveLink, nvram_enabled);

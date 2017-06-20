@@ -224,7 +224,7 @@ include_directories(
     ${SNAPPY_INCLUDE_DIR}
     ${OPENSSL_INCLUDE_DIR}
     ${D}/util
-    /home/skt_test/PMC_NVRAM_20160407_1327/package/api/include/
+    ${D}/io/nativeio/api/include
 )
 CONFIGURE_FILE(${CMAKE_SOURCE_DIR}/config.h.cmake ${CMAKE_BINARY_DIR}/config.h)
 
@@ -258,6 +258,11 @@ add_dual_library(hadoop
     ${D}/util/NativeCodeLoader.c
     ${D}/util/NativeCrc32.c
     ${D}/util/bulk_crc32.c
+    ${D}/io/nativeio/api/src/pmc_log.c
+    ${D}/io/nativeio/api/src/pmc_nvram_api.c
+    ${D}/io/nativeio/api/src/pmc_nvram_events.c
+    ${D}/io/nativeio/api/src/pmc_ossrv_linux.c
+    ${D}/io/nativeio/api/src/pmc_utils.c
 )
 if (NEED_LINK_DL)
    set(LIB_DL dl)

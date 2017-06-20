@@ -150,7 +150,7 @@ public class FSImage implements Closeable {
   
   protected FSImage(Configuration conf,
           Collection<URI> imageDirs,
-          List<URI> editsDirs, int nvram_enabled)
+          List<URI> editsDirs, boolean nvram_enabled)
 throws IOException {
 this.conf = conf;
 
@@ -190,6 +190,9 @@ archivalManager = new NNStorageRetentionManager(conf, storage, editLog);
 	    LOG.info("nvram format");
 	    LOG.info("Allocated new BlockPoolId: " + ns.getBlockPoolID());
 	    ns.clusterID = clusterId;
+	    storage.format(ns);
+	    editLog.formatNonFileJournals(ns);
+	    saveFSImageInAllDirs(fsn, 0);
 	  }
   
   /**
@@ -225,7 +228,7 @@ archivalManager = new NNStorageRetentionManager(conf, storage, editLog);
   boolean recoverTransitionRead(StartupOption startOpt, FSNamesystem target,
       MetaRecoveryContext recovery)
       throws IOException {
-    assert startOpt != StartupOption.FORMAT : 
+    assert startOpt != StartupOption.FORMAT || startOpt != StartupOption.NVRAM : 
       "NameNode formatting should be performed before reading the image";
     
     Collection<URI> imageDirs = storage.getImageDirectories();

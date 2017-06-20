@@ -35,6 +35,7 @@ import org.apache.hadoop.mapreduce.SleepJob;
 import org.apache.hadoop.util.ProgramDriver;
 
 import org.apache.hadoop.hdfs.NNBench;
+import org.apache.hadoop.hdfs.NNBenchWithoutMR;
 import org.apache.hadoop.fs.TestFileSystem;
 import org.apache.hadoop.fs.TestDFSIO;
 import org.apache.hadoop.fs.DFSCIOTest;
@@ -91,6 +92,8 @@ public class MapredTestDriver {
                    "A job that sleeps at each map and reduce task.");
       pgd.addClass("nnbench", NNBench.class, 
           "A benchmark that stresses the namenode.");
+      pgd.addClass("nnbenchWithoutMR", NNBenchWithoutMR.class,
+    		  "A benchmark that stresses the namenode w/o MR");
       pgd.addClass("testfilesystem", TestFileSystem.class, 
           "A test for FileSystem read/write.");
       pgd.addClass(TestDFSIO.class.getSimpleName(), TestDFSIO.class, 

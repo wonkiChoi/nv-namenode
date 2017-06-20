@@ -1027,9 +1027,9 @@ public class NameNode implements NameNodeStatusMXBean {
 	    }
 	    System.out.println("Formatting using clusterid: " + clusterId);
 	    
-	    FSImage fsImage = new FSImage(conf, nameDirsToFormat, editDirsToFormat, 1);
+	    FSImage fsImage = new FSImage(conf, nameDirsToFormat, editDirsToFormat, true);
 	    try {
-	      FSNamesystem fsn = new FSNamesystem(conf, fsImage, false, 1);
+	      FSNamesystem fsn = new FSNamesystem(conf, fsImage, false, true);
 	      fsImage.getEditLog().initJournalsForWrite();
 
 	      if (!fsImage.confirmFormat(force, isInteractive)) {

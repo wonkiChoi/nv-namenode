@@ -100,7 +100,7 @@ public abstract class INode implements INodeAttributes, Diff.Element<byte[]>, Se
   abstract void setUser(String user);
 
   /** Set user */
-  final INode setUser(String user, int latestSnapshotId) throws ClassNotFoundException, IOException {
+  final INode setUser(String user, int latestSnapshotId) {
     recordModification(latestSnapshotId);
     setUser(user);
     return this;
@@ -124,7 +124,7 @@ public abstract class INode implements INodeAttributes, Diff.Element<byte[]>, Se
   abstract void setGroup(String group);
 
   /** Set group */
-  final INode setGroup(String group, int latestSnapshotId) throws ClassNotFoundException, IOException {
+  final INode setGroup(String group, int latestSnapshotId) {
     recordModification(latestSnapshotId);
     setGroup(group);
     return this;
@@ -149,7 +149,7 @@ public abstract class INode implements INodeAttributes, Diff.Element<byte[]>, Se
   abstract void setPermission(FsPermission permission);
 
   /** Set the {@link FsPermission} of this {@link INode} */
-  INode setPermission(FsPermission permission, int latestSnapshotId) throws ClassNotFoundException, IOException {
+  INode setPermission(FsPermission permission, int latestSnapshotId) {
     recordModification(latestSnapshotId);
     setPermission(permission);
     return this;
@@ -164,7 +164,7 @@ public abstract class INode implements INodeAttributes, Diff.Element<byte[]>, Se
 
   abstract void addAclFeature(AclFeature aclFeature);
 
-  final INode addAclFeature(AclFeature aclFeature, int latestSnapshotId) throws ClassNotFoundException, IOException {
+  final INode addAclFeature(AclFeature aclFeature, int latestSnapshotId) {
     recordModification(latestSnapshotId);
     addAclFeature(aclFeature);
     return this;
@@ -172,7 +172,7 @@ public abstract class INode implements INodeAttributes, Diff.Element<byte[]>, Se
 
   abstract void removeAclFeature();
 
-  final INode removeAclFeature(int latestSnapshotId) throws ClassNotFoundException, IOException {
+  final INode removeAclFeature(int latestSnapshotId) {
     recordModification(latestSnapshotId);
     removeAclFeature();
     return this;
@@ -197,7 +197,7 @@ public abstract class INode implements INodeAttributes, Diff.Element<byte[]>, Se
    */
   abstract void addXAttrFeature(XAttrFeature xAttrFeature);
   
-  final INode addXAttrFeature(XAttrFeature xAttrFeature, int latestSnapshotId) throws ClassNotFoundException, IOException {
+  final INode addXAttrFeature(XAttrFeature xAttrFeature, int latestSnapshotId) {
     recordModification(latestSnapshotId);
     addXAttrFeature(xAttrFeature);
     return this;
@@ -208,7 +208,7 @@ public abstract class INode implements INodeAttributes, Diff.Element<byte[]>, Se
    */
   abstract void removeXAttrFeature();
   
-  final INode removeXAttrFeature(int lastestSnapshotId) throws ClassNotFoundException, IOException {
+  final INode removeXAttrFeature(int lastestSnapshotId) {
     recordModification(lastestSnapshotId);
     removeXAttrFeature();
     return this;
@@ -223,8 +223,7 @@ public abstract class INode implements INodeAttributes, Diff.Element<byte[]>, Se
   }
 
   /** Is this inode in the latest snapshot? */
-  public final boolean isInLatestSnapshot(final int latestSnapshotId) throws IOException, ClassNotFoundException {
-    int nvram_enabled = 0;
+  public final boolean isInLatestSnapshot(final int latestSnapshotId) {
 	  if (latestSnapshotId == Snapshot.CURRENT_STATE_ID || latestSnapshotId == Snapshot.NO_SNAPSHOT_ID) {
       return false;
     }
@@ -240,7 +239,7 @@ public abstract class INode implements INodeAttributes, Diff.Element<byte[]>, Se
     if (!parentDir.isInLatestSnapshot(latestSnapshotId)) {
       return false;
     }
-    final INode child = parentDir.getChild(getLocalNameBytes(), latestSnapshotId, nvram_enabled);
+    final INode child = parentDir.getChild(getLocalNameBytes(), latestSnapshotId);
     if (this == child) {
       return true;
     }
@@ -297,7 +296,7 @@ public abstract class INode implements INodeAttributes, Diff.Element<byte[]>, Se
  * @throws IOException 
  * @throws ClassNotFoundException 
    */
-  abstract void recordModification(final int latestSnapshotId) throws ClassNotFoundException, IOException;
+  abstract void recordModification(final int latestSnapshotId);
 
   /** Check whether it's a reference. */
   public boolean isReference() {
@@ -672,7 +671,7 @@ public abstract class INode implements INodeAttributes, Diff.Element<byte[]>, Se
 
   /** Set the last modification time of inode. */
   public final INode setModificationTime(long modificationTime,
-      int latestSnapshotId) throws ClassNotFoundException, IOException {
+      int latestSnapshotId) {
     recordModification(latestSnapshotId);
     setModificationTime(modificationTime);
     return this;
@@ -701,7 +700,7 @@ public abstract class INode implements INodeAttributes, Diff.Element<byte[]>, Se
   /**
    * Set last access time of inode.
    */
-  public final INode setAccessTime(long accessTime, int latestSnapshotId) throws ClassNotFoundException, IOException {
+  public final INode setAccessTime(long accessTime, int latestSnapshotId) {
     recordModification(latestSnapshotId);
     setAccessTime(accessTime);
     return this;

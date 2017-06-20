@@ -170,7 +170,7 @@ public class Snapshot implements Comparable<byte[]> {
     }
 
     @Override
-    public INode getChild(byte[] name, int snapshotId, int nvram_enabled) throws ClassNotFoundException, IOException {
+    public INode getChild(byte[] name, int snapshotId, boolean nvram_enabled) {
       return getParent().getChild(name, snapshotId, nvram_enabled);
     }
     
