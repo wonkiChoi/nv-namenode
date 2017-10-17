@@ -17,7 +17,9 @@
  */
 package org.apache.hadoop.hdfs.server.blockmanagement;
 
+import java.io.Serializable;
 import java.util.LinkedList;
+import java.util.Vector;
 
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.hdfs.protocol.Block;
@@ -32,11 +34,18 @@ import org.apache.hadoop.util.LightWeightGSet;
  * the {@link BlockCollection} it is part of and datanodes where the replicas of 
  * the block are stored.
  */
+
 @InterfaceAudience.Private
 public class BlockInfoContiguous extends Block
-    implements LightWeightGSet.LinkedElement {
-  public static final BlockInfoContiguous[] EMPTY_ARRAY = {};
+    implements LightWeightGSet.LinkedElement, Serializable {
 
+//wk modified
+//public static final BlockInfoContiguous[] EMPTY_ARRAY = {};
+	/**
+	 * 
+	 */
+	private static final long serialVersionUID = 2652695405998649123L;
+	public static final BlockInfoContiguous[] EMPTY_ARRAY = {};
   private BlockCollection bc;
 
   /** For implementing {@link LightWeightGSet.LinkedElement} interface */
@@ -62,7 +71,7 @@ public class BlockInfoContiguous extends Block
    */
   public BlockInfoContiguous(short replication) {
     this.triplets = new Object[3*replication];
-    this.bc = null;
+	  this.bc = null;
   }
   
   public BlockInfoContiguous(Block blk, short replication) {

@@ -20,10 +20,16 @@ package org.apache.hadoop.fs.permission;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
 import org.apache.hadoop.io.*;
+import org.apache.hadoop.io.nativeio.NativeIO;
+import org.apache.hadoop.util.BytesUtil;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 
 /**
  * Store permission related information.
@@ -31,6 +37,7 @@ import java.io.IOException;
 @InterfaceAudience.LimitedPrivate({"HDFS", "MapReduce"})
 @InterfaceStability.Unstable
 public class PermissionStatus implements Writable {
+	static final Logger LOG = LoggerFactory.getLogger(PermissionStatus.class);
   static final WritableFactory FACTORY = new WritableFactory() {
     @Override
     public Writable newInstance() { return new PermissionStatus(); }
@@ -58,6 +65,7 @@ public class PermissionStatus implements Writable {
   private String groupname;
   private FsPermission permission;
 
+  public int pos;
   private PermissionStatus() {}
 
   /** Constructor */
@@ -71,7 +79,10 @@ public class PermissionStatus implements Writable {
   public String getUserName() {return username;}
 
   /** Return group name */
-  public String getGroupName() {return groupname;}
+  public String getGroupName() {
+	  LOG.info("getGroupName called");
+	  return groupname;
+	  }
 
   /** Return permission */
   public FsPermission getPermission() {return permission;}
@@ -91,6 +102,45 @@ public class PermissionStatus implements Writable {
     groupname = Text.readString(in, Text.DEFAULT_MAX_LEN);
     permission = FsPermission.read(in);
   }
+  
+  public void readFields(int new_offset, int pos) throws IOException {
+	  LOG.info("aa");
+	  int size = NativeIO.readIntFromNVRAM(4096, new_offset, pos);
+	  int new_pos = pos + 4;
+	  //byte [] user = new byte[size];
+	  LOG.info("bb");
+	  username = new String(NativeIO.readBAFromNVRAM(4096, new_offset, new_pos, size));
+	  LOG.info("username in readField = " + username);
+	  new_pos = new_pos + 100;
+	  LOG.info("cc");
+	  size = NativeIO.readIntFromNVRAM(4096, new_offset, new_pos);
+	  new_pos = new_pos + 4;
+	  //byte [] group = new byte[size];
+	  LOG.info("dd");
+	  LOG.info("groupname size = " + size + " and new_pos " + new_pos);
+	  groupname = new String(NativeIO.readBAFromNVRAM(4096, new_offset, new_pos, size));
+	  LOG.info("groupname in readField = " + groupname);
+	  new_pos = new_pos + 100;
+	  permission = FsPermission.read(new_offset, new_pos);
+	  LOG.info("kk");
+	  new_pos = new_pos + 4;
+	  this.pos = new_pos;
+	  }
+  
+  public void readFields(ByteBuffer in) throws IOException {
+//	    username = Text.readString(in, Text.DEFAULT_MAX_LEN);
+//	    groupname = Text.readString(in, Text.DEFAULT_MAX_LEN);
+//	    permission = FsPermission.read(in);
+	  int size = in.getInt();
+	  byte [] user = new byte[size];
+	  in.get(user);
+	  username = new String(user);
+	  size = in.getInt();
+	  byte [] group = new byte[size];
+	  in.get(group);
+	  groupname = new String(group);
+	  permission = FsPermission.read(in);
+	  }
 
   @Override
   public void write(DataOutput out) throws IOException {
@@ -105,6 +155,18 @@ public class PermissionStatus implements Writable {
     p.readFields(in);
     return p;
   }
+  
+  public static PermissionStatus read(ByteBuffer in) throws IOException {
+	    PermissionStatus p = new PermissionStatus();
+	    p.readFields(in);
+	    return p;
+	  }
+  
+  public static PermissionStatus read(int new_offset, int pos) throws IOException {
+	    PermissionStatus p = new PermissionStatus();
+	    p.readFields(new_offset, pos);
+	    return p;
+	  }
 
   /**
    * Serialize a {@link PermissionStatus} from its base components.
@@ -117,6 +179,21 @@ public class PermissionStatus implements Writable {
     Text.writeString(out, groupname, Text.DEFAULT_MAX_LEN);
     permission.write(out);
   }
+  
+  public static void write(ByteBuffer out,
+          String username, 
+          String groupname,
+          FsPermission permission) throws IOException {
+//	  Text.writeString(out, username, Text.DEFAULT_MAX_LEN);
+//	  Text.writeString(out, groupname, Text.DEFAULT_MAX_LEN);
+	  byte [] byte_usr = username.getBytes();
+	  byte [] byte_group = groupname.getBytes();
+	  out.putInt(byte_usr.length);
+	  out.put(byte_usr);
+	  out.putInt(byte_group.length);
+	  out.put(byte_group);
+	  permission.write(out);
+}
 
   @Override
   public String toString() {

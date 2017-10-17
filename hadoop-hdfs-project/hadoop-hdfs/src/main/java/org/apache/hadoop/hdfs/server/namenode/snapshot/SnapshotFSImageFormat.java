@@ -20,6 +20,7 @@ package org.apache.hadoop.hdfs.server.namenode.snapshot;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -90,6 +91,23 @@ public class SnapshotFSImageFormat {
       }
     }
   }
+  
+  private static <N extends INode, A extends INodeAttributes, D extends AbstractINodeDiff<N, A, D>>
+  void saveINodeDiffs(final AbstractINodeDiffList<N, A, D> diffs,
+  final ByteBuffer out, ReferenceMap referenceMap) throws IOException {
+// Record the diffs in reversed order, so that we can find the correct
+// reference for INodes in the created list when loading the FSImage
+if (diffs == null) {
+  out.putInt(-1); // no diffs
+} else {
+  final List<D> list = diffs.asList();
+  final int size = list.size();
+  out.putInt(size);
+  for (int i = size - 1; i >= 0; i--) {
+    list.get(i).write(out, referenceMap);
+  }
+}
+}
 
   public static void saveDirectoryDiffList(final INodeDirectory dir,
       final DataOutput out, final ReferenceMap referenceMap
@@ -101,6 +119,11 @@ public class SnapshotFSImageFormat {
       final DataOutput out) throws IOException {
     saveINodeDiffs(file.getDiffs(), out, null);
   }
+  
+  public static void saveFileDiffList(final INodeFile file,
+	      final ByteBuffer out) throws IOException {
+	    saveINodeDiffs(file.getDiffs(), out, null);
+	  }
 
   public static FileDiffList loadFileDiffList(DataInput in,
       FSImageFormat.Loader loader) throws IOException {
@@ -342,6 +365,26 @@ public class SnapshotFSImageFormat {
         out.writeLong(id);
       }
     }
+    
+    public void writeINodeReferenceWithCount(
+            INodeReference.WithCount withCount, ByteBuffer out,
+            boolean writeUnderConstruction) throws IOException {
+          final INode referred = withCount.getReferredINode();
+          final long id = withCount.getId();
+          final boolean firstReferred = !referenceMap.containsKey(id);
+          if(firstReferred == true) {
+          out.put((byte) 1);
+          } else {
+        	  out.put((byte) 0);
+          }
+          if (firstReferred) {
+            FSImageSerialization.saveINode2Image(referred, out,
+                writeUnderConstruction, this);
+            referenceMap.put(id, withCount);
+          } else {
+            out.putLong(id);
+          }
+        }
     
     public boolean toProcessSubtree(long id) {
       if (dirMap.containsKey(id)) {

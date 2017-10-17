@@ -334,8 +334,14 @@ typedef enum
 
     /* Host Operating System Errors */
     /*==============================*/
-    P_STATUS_HOST_OS_ERROR = 0x0B01 /* Host Operating System Error - Note: For this error, detailed info can be
+    P_STATUS_HOST_OS_ERROR = 0x0B01, /* Host Operating System Error - Note: For this error, detailed info can be
                                        retrieved using "errno" variable */
+    P_STATUS_TEMP = 0x1111,
+    P_STATUS_TEMP2 = 0x1112,
+    P_STATUS_TEMP3 = 0x1113,
+    P_STATUS_TEMP4 = 0x1114,
+    P_STATUS_TEMP5 = 0x1115
+	    
 } P_STATUS;
 
 
@@ -1540,7 +1546,7 @@ P_STATUS PMC_NVRAM_mem_map(const dev_handle_t dev_handle,   /* The device handle
                                                inclusive OR of one or more of the following flags:
                                                NVRAM_MEM_MAP_FLAGS_DATA_READ,NVRAM_MEM_MAP_FLAGS_DATA_WRITE,
                                                NVRAM_MEM_MAP_FLAGS_DATA_EXEC. */
-                           void **virtual_address); /* Returned pointer to the mapped area */
+                           void **virtual_address, uint64_t offset); /* Returned pointer to the mapped area */
 
 
 /*==========================================================================================================*/

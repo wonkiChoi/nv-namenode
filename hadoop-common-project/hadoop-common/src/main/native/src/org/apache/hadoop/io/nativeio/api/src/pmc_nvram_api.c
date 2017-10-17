@@ -430,6 +430,7 @@ P_STATUS Pmc_internal_data_get(const dev_handle_t dev_handle,
     {
         PMCLOG_1(PMCLOG_ERROR, "pmc_ioctl failed, error 0x%04x.\n", res);
         return (res);
+
     }
 
 
@@ -618,7 +619,8 @@ static int Pmc_card_uid_get(Pmc_card_s * card)
     if (dev_handle.nvme_fd < 0)
     {
         PMCLOG_3(PMCLOG_ERROR, "Failed to open '%s', errno %d (%s).\n", card->dev_path, errno, strerror(errno));
-        return (P_STATUS_HOST_OS_ERROR);
+        //return (P_STATUS_HOST_OS_ERROR);
+	return P_STATUS_TEMP3;
     }
 
     /* get nvram card info */
@@ -791,7 +793,8 @@ static int Pmc_card_list_get(Pmc_card_s card_list[],
                 {
                     PMCLOG_2(PMCLOG_ERROR, "Pmc_is_mt_ramon_card for dev '%s' has failed, error 0x%04x.\n",
                              card.dev_path, res);
-                    return res;
+                  // return res;
+		  return P_STATUS_TEMP;
                 }
 
                 if (is_mt_ramon)
@@ -801,7 +804,7 @@ static int Pmc_card_list_get(Pmc_card_s card_list[],
                     {
                         PMCLOG_2(PMCLOG_ERROR, "Pmc_card_uid_get for dev file '%s' has failed, error 0x%04x.\n",
                                  card.dev_path, res);
-                        return res;
+			return res;
                     }
 
                     (*card_total_count)++;  /* increase total count */
@@ -1277,7 +1280,7 @@ P_STATUS PMC_NVRAM_init(const char card_uid[], dev_handle_t * dev_handle)
     if (pmc_init_once_status != P_STATUS_OK)
     {
         PMCLOG_1(PMCLOG_ERROR, "pmc_init_once failed, error %d.\n", pmc_init_once_status);
-        return (pmc_init_once_status);
+	return (pmc_init_once_status);
     }
 
     /* check if NVMe driver is installed */
@@ -1600,7 +1603,7 @@ P_STATUS PMC_NVRAM_status_get(const dev_handle_t dev_handle,
 /*====================================================*/
 /* API: PMC_NVRAM_mem_map */
 /*====================================================*/
-P_STATUS PMC_NVRAM_mem_map(const dev_handle_t dev_handle, const uint64_t size, const int flags, void **virtual_address)
+P_STATUS PMC_NVRAM_mem_map(const dev_handle_t dev_handle, const uint64_t size, const int flags, void **virtual_address, uint64_t offset)
 {
     int res;
     void *user_addr;
@@ -1681,7 +1684,7 @@ P_STATUS PMC_NVRAM_mem_map(const dev_handle_t dev_handle, const uint64_t size, c
     API_SEM_GIVE_RET_ERR(g_api_sem);
 
     /* map memory */
-    user_addr = mmap(NULL, size, prot, MAP_SHARED, g_module_handle, (off_t) (void *)(info_data.dmi.physical_addres));
+    user_addr = mmap(NULL, size, prot, MAP_SHARED, g_module_handle, info_data.dmi.physical_addres + offset);
 
     if (user_addr == MAP_FAILED)
     {

@@ -20,6 +20,7 @@ package org.apache.hadoop.hdfs.server.namenode.snapshot;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
+import java.io.Serializable;
 import java.text.SimpleDateFormat;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -145,8 +146,14 @@ public class Snapshot implements Comparable<byte[]> {
   }
 
   /** The root directory of the snapshot. */
-  static public class Root extends INodeDirectory {
-    Root(INodeDirectory other) {
+
+static public class Root extends INodeDirectory implements Serializable {
+    /**
+	 * 
+	 */
+	private static final long serialVersionUID = 5266192204296873032L;
+
+	Root(INodeDirectory other) {
       // Always preserve ACL, XAttr.
       super(other, false, Lists.newArrayList(
         Iterables.filter(Arrays.asList(other.getFeatures()), new Predicate<Feature>() {

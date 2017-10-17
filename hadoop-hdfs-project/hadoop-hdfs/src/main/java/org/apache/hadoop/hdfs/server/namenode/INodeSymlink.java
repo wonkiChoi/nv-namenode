@@ -18,6 +18,7 @@
 package org.apache.hadoop.hdfs.server.namenode;
 
 import java.io.PrintWriter;
+import java.io.Serializable;
 import java.util.List;
 
 import org.apache.hadoop.classification.InterfaceAudience;
@@ -30,8 +31,12 @@ import org.apache.hadoop.hdfs.server.namenode.snapshot.Snapshot;
  * An {@link INode} representing a symbolic link.
  */
 @InterfaceAudience.Private
-public class INodeSymlink extends INodeWithAdditionalFields {
-  private final byte[] symlink; // The target URI
+public class INodeSymlink extends INodeWithAdditionalFields implements Serializable {
+  /**
+	 * 
+	 */
+	private static final long serialVersionUID = -6310466637496139400L;
+private final byte[] symlink; // The target URI
 
   INodeSymlink(long id, byte[] name, PermissionStatus permissions,
       long mtime, long atime, String symlink) {

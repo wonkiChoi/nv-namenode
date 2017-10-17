@@ -19,6 +19,7 @@
 package org.apache.hadoop.io;
 
 import java.io.*;
+import java.nio.ByteBuffer;
 
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
@@ -253,6 +254,10 @@ public final class WritableUtils  {
     writeVLong(stream, i);
   }
   
+  public static void writeVInt(ByteBuffer stream, int i) throws IOException {
+	    writeVLong(stream, i);
+	  }
+  
   /**
    * Serializes a long to a binary stream with zero-compressed encoding.
    * For -112 <= i <= 127, only one byte is used with the actual value.
@@ -297,6 +302,35 @@ public final class WritableUtils  {
     }
   }
   
+  public static void writeVLong(ByteBuffer stream, long i) throws IOException {
+	    if (i >= -112 && i <= 127) {
+	      stream.put((byte)i);
+	      return;
+	    }
+	      
+	    int len = -112;
+	    if (i < 0) {
+	      i ^= -1L; // take one's complement'
+	      len = -120;
+	    }
+	      
+	    long tmp = i;
+	    while (tmp != 0) {
+	      tmp = tmp >> 8;
+	      len--;
+	    }
+	      
+	    stream.put((byte)len);
+	      
+	    len = (len < -120) ? -(len + 120) : -(len + 112);
+	      
+	    for (int idx = len; idx != 0; idx--) {
+	      int shiftbits = (idx - 1) * 8;
+	      long mask = 0xFFL << shiftbits;
+	      stream.put((byte)((i & mask) >> shiftbits));
+	    }
+	  }
+  
 
   /**
    * Reads a zero-compressed encoded long from input stream and returns it.
@@ -318,6 +352,21 @@ public final class WritableUtils  {
     }
     return (isNegativeVInt(firstByte) ? (i ^ -1L) : i);
   }
+  
+  public static long readVLong(ByteBuffer stream) throws IOException {
+	    byte firstByte = stream.get();
+	    int len = decodeVIntSize(firstByte);
+	    if (len == 1) {
+	      return firstByte;
+	    }
+	    long i = 0;
+	    for (int idx = 0; idx < len-1; idx++) {
+	      byte b = stream.get();
+	      i = i << 8;
+	      i = i | (b & 0xFF);
+	    }
+	    return (isNegativeVInt(firstByte) ? (i ^ -1L) : i);
+	  }
 
   /**
    * Reads a zero-compressed encoded integer from input stream and returns it.
@@ -360,6 +409,24 @@ public final class WritableUtils  {
     }
     return (int)n;
   }
+  
+  public static int readVIntInRange(ByteBuffer stream, int lower, int upper)
+	      throws IOException {
+	    long n = readVLong(stream);
+	    if (n < lower) {
+	      if (lower == 0) {
+	        throw new IOException("expected non-negative integer, got " + n);
+	      } else {
+	        throw new IOException("expected integer greater than or equal to " +
+	            lower + ", got " + n);
+	      }
+	    }
+	    if (n > upper) {
+	      throw new IOException("expected integer less or equal to " + upper +
+	          ", got " + n);
+	    }
+	    return (int)n;
+	  }
 
   /**
    * Given the first byte of a vint/vlong, determine the sign

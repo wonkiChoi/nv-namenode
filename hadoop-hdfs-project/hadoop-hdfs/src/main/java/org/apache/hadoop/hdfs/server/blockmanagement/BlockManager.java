@@ -172,7 +172,7 @@ public class BlockManager {
    * Mapping: Block -> { BlockCollection, datanodes, self ref }
    * Updated only in response to client-sent information.
    */
-  final BlocksMap blocksMap;
+  public final BlocksMap blocksMap;
 
   /** Replication thread. */
   final Daemon replicationThread = new Daemon(new ReplicationMonitor());
@@ -603,8 +603,10 @@ public class BlockManager {
   private static boolean commitBlock(
       final BlockInfoContiguousUnderConstruction block, final Block commitBlock)
       throws IOException {
+	  LOG.info("commmmmmiittt block");
     if (block.getBlockUCState() == BlockUCState.COMMITTED)
       return false;
+	  LOG.info("commmmmmiittt block end");
     assert block.getNumBytes() <= commitBlock.getNumBytes() :
       "commitBlock length is less than the stored one "
       + commitBlock.getNumBytes() + " vs. " + block.getNumBytes();
@@ -636,12 +638,68 @@ public class BlockManager {
     if(lastBlock.isComplete())
       return false; // already completed (e.g. by syncBlock)
     
+    LOG.info("commitBlock start");
     final boolean b = commitBlock(
         (BlockInfoContiguousUnderConstruction) lastBlock, commitBlock);
-    if(countNodes(lastBlock).liveReplicas() >= minReplication)
-      completeBlock(bc, bc.numBlocks()-1, false);
+    LOG.info("commitBlock d");
+ 
+    if(countNodes(lastBlock).liveReplicas() >= minReplication) {
+        LOG.info("commitBlock start");
+    	completeBlock(bc, bc.numBlocks()-1, false);
+        LOG.info("completeBlock done");
+    }
+
     return b;
   }
+  
+  public boolean commitOrCompleteLastBlock(BlockCollection bc,
+	      Block commitBlock, boolean nvram_enabled) throws IOException {
+	    if(nvram_enabled) {
+	 	   if(commitBlock == null)
+	 	      return false; // not committing, this is a block allocation retry
+	 	    //BlockInfoContiguous lastBlock = bc.getLastBlock();
+	 	   BlockInfoContiguous lastBlock = this.getStoredBlock(bc.getLastBlock());
+		   if(lastBlock.isComplete())
+			      return false; // already completed (e.g. by syncBlock)
+	 	   if(lastBlock == null)
+	 	      return false; // no blocks in file yet
+	 	    
+	 	    LOG.info("commitBlock start");
+	 	    final boolean b = commitBlock(
+	 	        (BlockInfoContiguousUnderConstruction) lastBlock, commitBlock);
+	 	    LOG.info("commitBlock d");
+	 	 
+	 	    if(countNodes(lastBlock).liveReplicas() >= minReplication) {
+	 	        LOG.info("commitBlock start");
+	 	    	completeBlock(bc, bc.numBlocks()-1, false);
+	 	        LOG.info("completeBlock done");
+	 	    }
+
+	 	    return b;
+	    } else {
+	   if(commitBlock == null)
+	      return false; // not committing, this is a block allocation retry
+	    BlockInfoContiguous lastBlock = bc.getLastBlock();
+	    if(lastBlock == null)
+	      return false; // no blocks in file yet
+	    if(lastBlock.isComplete())
+	      return false; // already completed (e.g. by syncBlock)
+	    
+	    LOG.info("commitBlock start");
+	    final boolean b = commitBlock(
+	        (BlockInfoContiguousUnderConstruction) lastBlock, commitBlock);
+	    LOG.info("commitBlock d");
+	 
+	    if(countNodes(lastBlock).liveReplicas() >= minReplication) {
+	        LOG.info("commitBlock start");
+	    	completeBlock(bc, bc.numBlocks()-1, false);
+	        LOG.info("completeBlock done");
+	    }
+
+	    return b;
+	    }
+	  }
+  
 
   /**
    * Convert a specified block of the file to a complete block.
@@ -729,6 +787,7 @@ public class BlockManager {
     assert oldBlock == getStoredBlock(oldBlock) :
       "last block of the file is not in blocksMap";
 
+    LOG.info("convertLastBlockToUnderConstruction");
     DatanodeStorageInfo[] targets = getStorages(oldBlock);
 
     BlockInfoContiguousUnderConstruction ucBlock =
@@ -796,6 +855,7 @@ public class BlockManager {
     long endOff = offset + length;
     List<LocatedBlock> results = new ArrayList<LocatedBlock>(blocks.length);
     do {
+      LOG.info("createLocatedBlockList");
       results.add(createLocatedBlock(blocks[curBlk], curPos, mode));
       curPos += blocks[curBlk].getNumBytes();
       curBlk++;
@@ -817,13 +877,14 @@ public class BlockManager {
       }
       curPos += blkSize;
     }
-    
+    LOG.info("createLocatedBlock222");
     return createLocatedBlock(blocks[curBlk], curPos, mode);
   }
   
   private LocatedBlock createLocatedBlock(final BlockInfoContiguous blk, final long pos,
     final BlockTokenSecretManager.AccessMode mode) throws IOException {
     final LocatedBlock lb = createLocatedBlock(blk, pos);
+    LOG.info("createLocatedBlock111");
     if (mode != null) {
       setBlockToken(lb, mode);
     }
@@ -858,23 +919,48 @@ public class BlockManager {
     final int numNodes = blocksMap.numNodes(blk);
     final boolean isCorrupt = numCorruptReplicas == numNodes;
     final int numMachines = isCorrupt ? numNodes: numNodes - numCorruptReplicas;
+    LOG.info("block infor = " + blk.getBlockName() + " " + blk.getBlockId() + " " 
+    + blk.getNumBytes() + " ");
+    LOG.info("block info = " + numCorruptNodes);
+    LOG.info("block info = " + numCorruptReplicas);
+    LOG.info("block info = " + numNodes);
+    LOG.info("block info = " + isCorrupt);
+    LOG.info("block info = " + numMachines);
+
     final DatanodeStorageInfo[] machines = new DatanodeStorageInfo[numMachines];
     int j = 0;
     if (numMachines > 0) {
-      for(DatanodeStorageInfo storage : blocksMap.getStorages(blk)) {
-        final DatanodeDescriptor d = storage.getDatanodeDescriptor();
+    	for(BlockInfoContiguous bk : blocksMap.getBlocks()) {
+    		LOG.info("bk list = " + bk); 		
+    	}
+     // for(DatanodeStorageInfo storage : blocksMap.getStorages(blk)) {
+    	for(DatanodeStorageInfo storage : blocksMap.getStorages(blocksMap.getStoredBlock(blk))) {
+    	  LOG.info("nono?");
+    	  if(storage == null) {
+    		  LOG.info("how i can understand this");
+    	  } else {
+    		  LOG.info("storage info = " + storage.toString());
+    	  }
+    	  final DatanodeDescriptor d = storage.getDatanodeDescriptor();
         final boolean replicaCorrupt = corruptReplicas.isReplicaCorrupt(blk, d);
-        if (isCorrupt || (!replicaCorrupt))
-          machines[j++] = storage;
+        if (isCorrupt || (!replicaCorrupt)) {
+          LOG.info("machine add!!");
+        	machines[j++] = storage;
+        }
       }
     }
+    LOG.info("machine length = " + machines.length);
     assert j == machines.length :
       "isCorrupt: " + isCorrupt + 
       " numMachines: " + numMachines +
       " numNodes: " + numNodes +
       " numCorrupt: " + numCorruptNodes +
       " numCorruptRepls: " + numCorruptReplicas;
-    final ExtendedBlock eb = new ExtendedBlock(namesystem.getBlockPoolId(), blk);
+    //final ExtendedBlock eb = new ExtendedBlock(namesystem.getBlockPoolId(), blk);
+    final ExtendedBlock eb = new ExtendedBlock(namesystem.getBlockPoolId(), blocksMap.getStoredBlock(blk));
+    LOG.info("Extendedblock " + eb.toString());
+    LocatedBlock test = new LocatedBlock(eb, machines, pos, isCorrupt);
+    LOG.info("testblock = " + test.toString());
     return new LocatedBlock(eb, machines, pos, isCorrupt);
   }
 
@@ -2531,13 +2617,16 @@ public class BlockManager {
                                boolean logEveryBlock)
   throws IOException {
     assert block != null && namesystem.hasWriteLock();
+    LOG.info("block--> datanode code");
     BlockInfoContiguous storedBlock;
     DatanodeDescriptor node = storageInfo.getDatanodeDescriptor();
     if (block instanceof BlockInfoContiguousUnderConstruction) {
       //refresh our copy in case the block got completed in another thread
-      storedBlock = blocksMap.getStoredBlock(block);
+    	LOG.info("block--> datanode code11");
+    	storedBlock = blocksMap.getStoredBlock(block);
     } else {
-      storedBlock = block;
+    	LOG.info("block--> datanode code22");
+    	storedBlock = block;
     }
     if (storedBlock == null || storedBlock.getBlockCollection() == null) {
       // If this block does not belong to anyfile, then we are done.
@@ -2556,11 +2645,13 @@ public class BlockManager {
 
     int curReplicaDelta;
     if (result == AddBlockResult.ADDED) {
+    	LOG.info("block--> datanode code22");
       curReplicaDelta = 1;
       if (logEveryBlock) {
         logAddStoredBlock(storedBlock, node);
       }
     } else if (result == AddBlockResult.REPLACED) {
+    	LOG.info("block--> datanode code44");
       curReplicaDelta = 0;
       blockLog.warn("BLOCK* addStoredBlock: block {} moved to storageType " +
           "{} on node {}", storedBlock, storageInfo.getStorageType(), node);
@@ -2581,11 +2672,13 @@ public class BlockManager {
     int numLiveReplicas = num.liveReplicas();
     int numCurrentReplica = numLiveReplicas
       + pendingReplications.getNumReplicas(storedBlock);
-
+    LOG.info("block--> datanode code55 , numLiveReplicas = " + numLiveReplicas + " numCurrentReplica = " + numCurrentReplica );
     if(storedBlock.getBlockUCState() == BlockUCState.COMMITTED &&
         numLiveReplicas >= minReplication) {
+    	LOG.info("block--> datanode code66");
       storedBlock = completeBlock(bc, storedBlock, false);
     } else if (storedBlock.isComplete() && result == AddBlockResult.ADDED) {
+    	LOG.info("block--> datanode code77");
       // check whether safe replication is reached for the block
       // only complete blocks are counted towards that
       // Is no-op if not in safe mode.

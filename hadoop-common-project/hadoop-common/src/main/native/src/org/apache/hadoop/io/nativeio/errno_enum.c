@@ -102,7 +102,7 @@ void errno_enum_deinit(JNIEnv *env) {
 }
 
 
-static char *errno_to_string(int errnum) {
+char *errno_to_string(int errnum) {
   int i;
   for (i = 0; ERRNO_MAPPINGS[i].errno_str != NULL; i++) {
     if (ERRNO_MAPPINGS[i].errno_val == errnum)

@@ -26,9 +26,12 @@ import org.apache.hadoop.hdfs.util.EnumCounters;
 /**
  * Counters for namespace, storage space and storage type space quota and usage.
  */
-@SuppressWarnings("serial")
 public class QuotaCounts implements Serializable {
-  // Name space and storage space counts (HDFS-7775 refactors the original disk
+  /**
+	 * 
+	 */
+	private static final long serialVersionUID = -6310148893678414441L;
+// Name space and storage space counts (HDFS-7775 refactors the original disk
   // space count to storage space counts)
   private EnumCounters<Quota> nsSsCounts;
   // Storage type space counts

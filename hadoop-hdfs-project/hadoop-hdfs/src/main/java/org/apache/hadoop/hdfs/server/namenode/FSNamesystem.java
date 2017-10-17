@@ -90,6 +90,7 @@ import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_REPLICATION_KEY;
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_SUPPORT_APPEND_DEFAULT;
 import static org.apache.hadoop.hdfs.DFSConfigKeys.DFS_SUPPORT_APPEND_KEY;
 import static org.apache.hadoop.hdfs.server.common.HdfsServerConstants.SECURITY_XATTR_UNREADABLE_BY_SUPERUSER;
+import static org.apache.hadoop.hdfs.server.namenode.snapshot.Snapshot.CURRENT_STATE_ID;
 import static org.apache.hadoop.util.Time.now;
 import static org.apache.hadoop.util.Time.monotonicNow;
 
@@ -108,6 +109,7 @@ import java.io.StringWriter;
 import java.lang.management.ManagementFactory;
 import java.net.InetAddress;
 import java.net.URI;
+import java.nio.ByteBuffer;
 import java.security.GeneralSecurityException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -528,6 +530,9 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
   private TopMetrics topMetrics;
 
   private INodeAttributeProvider inodeAttributeProvider;
+  
+  ByteBuffer nvram_meta;
+  public long meta_size;
 
   /**
    * Notify that loading of this FSDirectory is complete, and
@@ -670,7 +675,13 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     FSImage fsImage = new FSImage(conf,
         FSNamesystem.getNamespaceDirs(conf),
         FSNamesystem.getNamespaceEditsDirs(conf));
-    FSNamesystem namesystem = new FSNamesystem(conf, fsImage, false);
+    boolean nvram_enabled = conf.getBoolean(DFSConfigKeys.DFS_NAME_NVRAM, DFSConfigKeys.DFS_NAME_NVRAM_DEFAULT);
+    FSNamesystem namesystem;
+    if(nvram_enabled == true) {
+     namesystem = new FSNamesystem(conf, fsImage, false, true);
+    } else {
+     namesystem = new FSNamesystem(conf, fsImage, false);
+       }
     StartupOption startOpt = NameNode.getStartupOption(conf);
     if (startOpt == StartupOption.RECOVER) {
       namesystem.setSafeMode(SafeModeAction.SAFEMODE_ENTER);
@@ -692,6 +703,35 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     }
     return namesystem;
   }
+  
+  static FSNamesystem loadFromDisk(Configuration conf, boolean nvram_enabled) throws IOException {
+
+	    checkConfiguration(conf);
+	    FSImage fsImage = new FSImage(conf,
+	        FSNamesystem.getNamespaceDirs(conf),
+	        FSNamesystem.getNamespaceEditsDirs(conf));
+	    FSNamesystem namesystem = new FSNamesystem(conf, fsImage, false, nvram_enabled, true);
+	    StartupOption startOpt = NameNode.getStartupOption(conf);
+	    if (startOpt == StartupOption.RECOVER) {
+	      namesystem.setSafeMode(SafeModeAction.SAFEMODE_ENTER);
+	    }
+
+	    long loadStart = monotonicNow();
+	    try {
+	      namesystem.loadFSImage(startOpt);
+	    } catch (IOException ioe) {
+	      LOG.warn("Encountered exception loading fsimage", ioe);
+	      fsImage.close();
+	      throw ioe;
+	    }
+	    long timeTakenToLoadFSImage = monotonicNow() - loadStart;
+	    LOG.info("Finished loading FSImage in " + timeTakenToLoadFSImage + " msecs");
+	    NameNodeMetrics nnMetrics = NameNode.getNameNodeMetrics();
+	    if (nnMetrics != null) {
+	      nnMetrics.setFsImageLoadTime((int) timeTakenToLoadFSImage);
+	    }
+	    return namesystem;
+	  }
   
   FSNamesystem(Configuration conf, FSImage fsImage) throws IOException {
     this(conf, fsImage, false);
@@ -973,6 +1013,151 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
 	      
 	      this.dtSecretManager = createDelegationTokenSecretManager(conf);
 	      this.dir = new FSDirectory(this, conf, nvram_enabled);
+	      this.snapshotManager = new SnapshotManager(dir);
+	      this.cacheManager = new CacheManager(this, conf, blockManager);
+	      this.safeMode = new SafeModeInfo(conf);
+	      this.topConf = new TopConf(conf);
+	      this.auditLoggers = initAuditLoggers(conf);
+	      this.isDefaultAuditLogger = auditLoggers.size() == 1 &&
+	        auditLoggers.get(0) instanceof DefaultAuditLogger;
+	      this.retryCache = ignoreRetryCache ? null : initRetryCache(conf);
+	      Class<? extends INodeAttributeProvider> klass = conf.getClass(
+	          DFS_NAMENODE_INODE_ATTRIBUTES_PROVIDER_KEY,
+	          null, INodeAttributeProvider.class);
+	      if (klass != null) {
+	        inodeAttributeProvider = ReflectionUtils.newInstance(klass, conf);
+	        LOG.info("Using INode attribute provider: " + klass.getName());
+	      }
+	    } catch(IOException e) {
+	      LOG.error(getClass().getSimpleName() + " initialization failed.", e);
+	      close();
+	      throw e;
+	    } catch (RuntimeException re) {
+	      LOG.error(getClass().getSimpleName() + " initialization failed.", re);
+	      close();
+	      throw re;
+	    }
+	  }
+ 
+ FSNamesystem(Configuration conf, FSImage fsImage, boolean ignoreRetryCache, boolean nvram_enabled, boolean recovery)
+	      throws IOException {
+	    provider = DFSUtil.createKeyProviderCryptoExtension(conf);
+	    if (provider == null) {
+	      LOG.info("No KeyProvider found.");
+	    } else {
+	      LOG.info("Found KeyProvider: " + provider.toString());
+	    }
+	    if (conf.getBoolean(DFS_NAMENODE_AUDIT_LOG_ASYNC_KEY,
+	                        DFS_NAMENODE_AUDIT_LOG_ASYNC_DEFAULT)) {
+	      LOG.info("Enabling async auditlog");
+	      enableAsyncAuditLog();
+	    }
+	    boolean fair = conf.getBoolean("dfs.namenode.fslock.fair", true);
+	    LOG.info("fsLock is fair:" + fair);
+	    fsLock = new FSNamesystemLock(fair);
+	    cond = fsLock.writeLock().newCondition();
+	    cpLock = new ReentrantLock();
+
+	    this.fsImage = fsImage;
+	    try {
+	      resourceRecheckInterval = conf.getLong(
+	          DFS_NAMENODE_RESOURCE_CHECK_INTERVAL_KEY,
+	          DFS_NAMENODE_RESOURCE_CHECK_INTERVAL_DEFAULT);
+
+	      this.blockManager = new BlockManager(this, conf);
+	      this.datanodeStatistics = blockManager.getDatanodeManager().getDatanodeStatistics();
+	      this.blockIdManager = new BlockIdManager(blockManager);
+
+	      this.fsOwner = UserGroupInformation.getCurrentUser();
+	      this.supergroup = conf.get(DFS_PERMISSIONS_SUPERUSERGROUP_KEY, 
+	                                 DFS_PERMISSIONS_SUPERUSERGROUP_DEFAULT);
+	      this.isPermissionEnabled = conf.getBoolean(DFS_PERMISSIONS_ENABLED_KEY,
+	                                                 DFS_PERMISSIONS_ENABLED_DEFAULT);
+	      LOG.info("fsOwner             = " + fsOwner);
+	      LOG.info("supergroup          = " + supergroup);
+	      LOG.info("isPermissionEnabled = " + isPermissionEnabled);
+
+	      // block allocation has to be persisted in HA using a shared edits directory
+	      // so that the standby has up-to-date namespace information
+	      nameserviceId = DFSUtil.getNamenodeNameServiceId(conf);
+	      this.haEnabled = HAUtil.isHAEnabled(conf, nameserviceId);  
+	      
+	      // Sanity check the HA-related config.
+	      if (nameserviceId != null) {
+	        LOG.info("Determined nameservice ID: " + nameserviceId);
+	      }
+	      LOG.info("HA Enabled: " + haEnabled);
+	      if (!haEnabled && HAUtil.usesSharedEditsDir(conf)) {
+	        LOG.warn("Configured NNs:\n" + DFSUtil.nnAddressesAsString(conf));
+	        throw new IOException("Invalid configuration: a shared edits dir " +
+	            "must not be specified if HA is not enabled.");
+	      }
+
+	      // Get the checksum type from config
+	      String checksumTypeStr = conf.get(DFS_CHECKSUM_TYPE_KEY, DFS_CHECKSUM_TYPE_DEFAULT);
+	      DataChecksum.Type checksumType;
+	      try {
+	         checksumType = DataChecksum.Type.valueOf(checksumTypeStr);
+	      } catch (IllegalArgumentException iae) {
+	         throw new IOException("Invalid checksum type in "
+	            + DFS_CHECKSUM_TYPE_KEY + ": " + checksumTypeStr);
+	      }
+
+	      this.serverDefaults = new FsServerDefaults(
+	          conf.getLongBytes(DFS_BLOCK_SIZE_KEY, DFS_BLOCK_SIZE_DEFAULT),
+	          conf.getInt(DFS_BYTES_PER_CHECKSUM_KEY, DFS_BYTES_PER_CHECKSUM_DEFAULT),
+	          conf.getInt(DFS_CLIENT_WRITE_PACKET_SIZE_KEY, DFS_CLIENT_WRITE_PACKET_SIZE_DEFAULT),
+	          (short) conf.getInt(DFS_REPLICATION_KEY, DFS_REPLICATION_DEFAULT),
+	          conf.getInt(IO_FILE_BUFFER_SIZE_KEY, IO_FILE_BUFFER_SIZE_DEFAULT),
+	          conf.getBoolean(DFS_ENCRYPT_DATA_TRANSFER_KEY, DFS_ENCRYPT_DATA_TRANSFER_DEFAULT),
+	          conf.getLong(FS_TRASH_INTERVAL_KEY, FS_TRASH_INTERVAL_DEFAULT),
+	          checksumType);
+	      
+	      this.maxFsObjects = conf.getLong(DFS_NAMENODE_MAX_OBJECTS_KEY, 
+	                                       DFS_NAMENODE_MAX_OBJECTS_DEFAULT);
+
+	      this.minBlockSize = conf.getLong(DFSConfigKeys.DFS_NAMENODE_MIN_BLOCK_SIZE_KEY,
+	          DFSConfigKeys.DFS_NAMENODE_MIN_BLOCK_SIZE_DEFAULT);
+	      this.maxBlocksPerFile = conf.getLong(DFSConfigKeys.DFS_NAMENODE_MAX_BLOCKS_PER_FILE_KEY,
+	          DFSConfigKeys.DFS_NAMENODE_MAX_BLOCKS_PER_FILE_DEFAULT);
+	      this.accessTimePrecision = conf.getLong(DFS_NAMENODE_ACCESSTIME_PRECISION_KEY,
+	          DFS_NAMENODE_ACCESSTIME_PRECISION_DEFAULT);
+	      this.supportAppends = conf.getBoolean(DFS_SUPPORT_APPEND_KEY, DFS_SUPPORT_APPEND_DEFAULT);
+	      LOG.info("Append Enabled: " + supportAppends);
+
+	      this.dtpReplaceDatanodeOnFailure = ReplaceDatanodeOnFailure.get(conf);
+	      
+	      this.standbyShouldCheckpoint = conf.getBoolean(
+	          DFS_HA_STANDBY_CHECKPOINTS_KEY, DFS_HA_STANDBY_CHECKPOINTS_DEFAULT);
+	      // # edit autoroll threshold is a multiple of the checkpoint threshold 
+	      this.editLogRollerThreshold = (long)
+	          (conf.getFloat(
+	              DFS_NAMENODE_EDIT_LOG_AUTOROLL_MULTIPLIER_THRESHOLD,
+	              DFS_NAMENODE_EDIT_LOG_AUTOROLL_MULTIPLIER_THRESHOLD_DEFAULT) *
+	          conf.getLong(
+	              DFS_NAMENODE_CHECKPOINT_TXNS_KEY,
+	              DFS_NAMENODE_CHECKPOINT_TXNS_DEFAULT));
+	      this.editLogRollerInterval = conf.getInt(
+	          DFS_NAMENODE_EDIT_LOG_AUTOROLL_CHECK_INTERVAL_MS,
+	          DFS_NAMENODE_EDIT_LOG_AUTOROLL_CHECK_INTERVAL_MS_DEFAULT);
+
+	      this.lazyPersistFileScrubIntervalSec = conf.getInt(
+	          DFS_NAMENODE_LAZY_PERSIST_FILE_SCRUB_INTERVAL_SEC,
+	          DFS_NAMENODE_LAZY_PERSIST_FILE_SCRUB_INTERVAL_SEC_DEFAULT);
+
+	      if (this.lazyPersistFileScrubIntervalSec == 0) {
+	        throw new IllegalArgumentException(
+	            DFS_NAMENODE_LAZY_PERSIST_FILE_SCRUB_INTERVAL_SEC + " must be non-zero.");
+	      }
+
+	      // For testing purposes, allow the DT secret manager to be started regardless
+	      // of whether security is enabled.
+	      alwaysUseDelegationTokensForTests = conf.getBoolean(
+	          DFS_NAMENODE_DELEGATION_TOKEN_ALWAYS_USE_KEY,
+	          DFS_NAMENODE_DELEGATION_TOKEN_ALWAYS_USE_DEFAULT);
+	      
+	      this.dtSecretManager = createDelegationTokenSecretManager(conf);
+	      this.dir = new FSDirectory(this, conf, nvram_enabled, recovery);
 	      this.snapshotManager = new SnapshotManager(dir);
 	      this.cacheManager = new CacheManager(this, conf, blockManager);
 	      this.safeMode = new SafeModeInfo(conf);
@@ -1998,6 +2183,9 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
         FSDirectory.isReservedRawName(srcArg) ? null
             : dir.getFileEncryptionInfo(inode, iip.getPathSnapshotId(), iip);
 
+    LOG.info("getBlockLocation = isSnapshot " + iip.getPathSnapshotId() +
+    		" getblocks = " + inode.getBlocks().length + " getBlocks 2 = "
+    				+ inode.getBlocks(iip.getPathSnapshotId()).length);
     final LocatedBlocks blocks = blockManager.createLocatedBlocks(
         inode.getBlocks(iip.getPathSnapshotId()), fileSize,
         isUc, offset, length, needBlockToken, iip.isSnapshot(), feInfo);
@@ -3247,6 +3435,8 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
           clientMachine);
       replication = pendingFile.getFileReplication();
       storagePolicyID = pendingFile.getStoragePolicyID();
+      LOG.info("target file = " + pendingFile.getFullPathName());
+      LOG.info("info = " + blockSize + " " + clientMachine + " " + replication);
     } finally {
       readUnlock();
     }
@@ -3299,6 +3489,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
         }
       }
 
+      LOG.info("storeAllocatedBlock called");
       // commit the last block and complete it if it has minimum replicas
       commitOrCompleteLastBlock(pendingFile, fileState.iip,
                                 ExtendedBlock.getLocalBlock(previous));
@@ -3307,10 +3498,10 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       newBlock = createNewBlock();
       INodesInPath inodesInPath = INodesInPath.fromINode(pendingFile);
       saveAllocatedBlock(src, inodesInPath, newBlock, targets);
-
-      if(this.dir.nvram_enabled == false) {
-    	  persistNewBlock(src, pendingFile); 
-      }
+      persistNewBlock(src, pendingFile); 
+      LOG.info("this is addBlock pending file !");
+      LOG.info("block num = " + pendingFile.getBlocks().length);
+      
       offset = pendingFile.computeFileSize();
     } finally {
       writeUnlock();
@@ -3369,15 +3560,17 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     Block previousBlock = ExtendedBlock.getLocalBlock(previous);
     final INode inode;
     final INodesInPath iip;
-    if (fileId == INodeId.GRANDFATHER_INODE_ID) {
+    if (fileId == INodeId.GRANDFATHER_INODE_ID || this.dir.nvram_enabled) {
       // Older clients may not have given us an inode ID to work with.
       // In this case, we have to try to resolve the path and hope it
       // hasn't changed or been deleted since the file was opened for write.
-      iip = dir.getINodesInPath4Write(src);
+      LOG.info("old analyzeFileState");
+    	iip = dir.getINodesInPath4Write(src);
       inode = iip.getLastINode();
     } else {
       // Newer clients pass the inode ID, so we can just get the inode
       // directly.
+    	LOG.info("new analyzeFileState");
       inode = dir.getInode(fileId);
       iip = INodesInPath.fromINode(inode);
       if (inode != null) {
@@ -3487,7 +3680,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
 
       //check lease
       final INode inode;
-      if (fileId == INodeId.GRANDFATHER_INODE_ID) {
+      if (fileId == INodeId.GRANDFATHER_INODE_ID || this.dir.nvram_enabled) {
         // Older clients may not have given us an inode ID to work with.
         // In this case, we have to try to resolve the path and hope it
         // hasn't changed or been deleted since the file was opened for write.
@@ -3543,10 +3736,11 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
 
       final INode inode;
       final INodesInPath iip;
-      if (fileId == INodeId.GRANDFATHER_INODE_ID) {
+      if (fileId == INodeId.GRANDFATHER_INODE_ID || this.dir.nvram_enabled) {
         // Older clients may not have given us an inode ID to work with.
         // In this case, we have to try to resolve the path and hope it
         // hasn't changed or been deleted since the file was opened for write.
+    	  LOG.info("abandonBlock");
         iip = dir.getINodesInPath(src, true);
         inode = iip.getLastINode();
       } else {
@@ -3658,13 +3852,15 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     final INodesInPath iip;
     INode inode = null;
     try {
-      if (fileId == INodeId.GRANDFATHER_INODE_ID) {
+      if (fileId == INodeId.GRANDFATHER_INODE_ID || this.dir.nvram_enabled) {
         // Older clients may not have given us an inode ID to work with.
         // In this case, we have to try to resolve the path and hope it
         // hasn't changed or been deleted since the file was opened for write.
-        iip = dir.getINodesInPath(src, true);
+        LOG.info("old complete~!");
+    	  iip = dir.getINodesInPath(src, true);
         inode = iip.getLastINode();
       } else {
+    	  LOG.info("new complete~!");
         inode = dir.getInode(fileId);
         iip = INodesInPath.fromINode(inode);
         if (inode != null) {
@@ -3694,11 +3890,12 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     }
     // Check the state of the penultimate block. It should be completed
     // before attempting to complete the last one.
+
     if (!checkFileProgress(src, pendingFile, false)) {
       return false;
     }
-
-    // commit the last block and complete it if it has minimum replicas
+    LOG.info("complete file");
+     // commit the last block and complete it if it has minimum replicas
     commitOrCompleteLastBlock(pendingFile, iip, last);
 
     if (!checkFileProgress(src, pendingFile, true)) {
@@ -4138,7 +4335,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       checkNameNodeSafeMode("Cannot fsync file " + src);
       src = dir.resolvePath(pc, src, pathComponents);
       final INode inode;
-      if (fileId == INodeId.GRANDFATHER_INODE_ID) {
+      if (fileId == INodeId.GRANDFATHER_INODE_ID || this.dir.nvram_enabled) {
         // Older clients may not have given us an inode ID to work with.
         // In this case, we have to try to resolve the path and hope it
         // hasn't changed or been deleted since the file was opened for write.
@@ -4326,10 +4523,13 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
   private void commitOrCompleteLastBlock(final INodeFile fileINode,
       final INodesInPath iip, final Block commitBlock) throws IOException {
     assert hasWriteLock();
-    Preconditions.checkArgument(fileINode.isUnderConstruction());
-    if (!blockManager.commitOrCompleteLastBlock(fileINode, commitBlock)) {
+    LOG.info("commitOrCompleteLastBlock");
+    Preconditions.checkArgument(fileINode.isUnderConstruction()); 
+    if (!blockManager.commitOrCompleteLastBlock(fileINode, commitBlock, this.dir.nvram_enabled)) {
+    //	if(!blockManager.commitOrCompleteLastBlock(fileINode, commitBlock)) {
+      LOG.info("yogido?");
       return;
-    }
+    } 
 
     // Adjust disk space consumption if required
     final long diff = fileINode.getPreferredBlockSize() - commitBlock.getNumBytes();    
@@ -4359,6 +4559,9 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     // Create permanent INode, update blocks. No need to replace the inode here
     // since we just remove the uc feature from pendingFile
     pendingFile.toCompleteFile(now());
+    if(this.dir.nvram_enabled) {
+    this.dir.rootDir.commitChild(pendingFile, blockManager.getBlockCollection(pendingFile.getLastBlock()), this.dir.nvram_enabled);
+    }
 
     waitForLoadingFSImage();
     // close file and persist block allocations for this file
@@ -4594,6 +4797,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       BlockInfoContiguous storedBlock) throws IOException {
     final INodesInPath iip = INodesInPath.fromINode(pendingFile);
 
+    LOG.info("closeFile called");
     // commit the last block and complete it if it has minimum replicas
     commitOrCompleteLastBlock(pendingFile, iip, storedBlock);
 
@@ -6347,21 +6551,25 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
   private boolean isFileDeleted(INodeFile file) {
     // Not in the inodeMap or in the snapshot but marked deleted.
     if (dir.getInode(file.getId()) == null) {
-      return true;
+    	return true;
     }
 
     // look at the path hierarchy to see if one parent is deleted by recursive
     // deletion
     INode tmpChild = file;
     INodeDirectory tmpParent = file.getParent();
+    LOG.info("is Delete");
+    LOG.info("tmpParent = " + tmpParent.getFullPathName() + " tmpChild = " + tmpChild.getFullPathName());
     while (true) {
       if (tmpParent == null) {
         return true;
       }
       boolean nvram_enabled = dir.getEnabled(); 
-
       INode childINode = tmpParent.getChild(tmpChild.getLocalNameBytes(),
           Snapshot.CURRENT_STATE_ID, nvram_enabled);
+      if(childINode != null) {
+    	  LOG.info("Child Inode = " + childINode.getFullPathName());
+    	     }
       if (childINode == null || !childINode.equals(tmpChild)) {
         // a newly created INode with the same name as an already deleted one
         // would be a different INode than the deleted one

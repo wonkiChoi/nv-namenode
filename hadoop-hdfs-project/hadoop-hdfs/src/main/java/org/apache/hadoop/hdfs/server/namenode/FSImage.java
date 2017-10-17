@@ -151,19 +151,19 @@ public class FSImage implements Closeable {
   protected FSImage(Configuration conf,
           Collection<URI> imageDirs,
           List<URI> editsDirs, boolean nvram_enabled)
-throws IOException {
-this.conf = conf;
+      throws IOException {
+    this.conf = conf;
 
-storage = new NNStorage(conf, imageDirs, editsDirs);
-if(conf.getBoolean(DFSConfigKeys.DFS_NAMENODE_NAME_DIR_RESTORE_KEY,
+    storage = new NNStorage(conf, imageDirs, editsDirs);
+    if(conf.getBoolean(DFSConfigKeys.DFS_NAMENODE_NAME_DIR_RESTORE_KEY,
              DFSConfigKeys.DFS_NAMENODE_NAME_DIR_RESTORE_DEFAULT)) {
-storage.setRestoreFailedStorage(true);
-}
+       storage.setRestoreFailedStorage(true);
+      }
 
-this.editLog = new FSEditLog(conf, storage, editsDirs, nvram_enabled);
+      this.editLog = new FSEditLog(conf, storage, editsDirs, nvram_enabled);
 
-archivalManager = new NNStorageRetentionManager(conf, storage, editLog);
-}
+    archivalManager = new NNStorageRetentionManager(conf, storage, editLog);
+ }
  
   void format(FSNamesystem fsn, String clusterId) throws IOException {
     long fileCount = fsn.getTotalFiles();

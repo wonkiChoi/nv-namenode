@@ -22,6 +22,7 @@
 
 void errno_enum_init(JNIEnv *env);
 void errno_enum_deinit(JNIEnv *env);
+char * errno_to_string(int errnum);
 jobject errno_to_enum(JNIEnv *env, int errnum);
 
 #endif

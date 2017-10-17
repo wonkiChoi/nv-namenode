@@ -17,6 +17,8 @@
  */
 package org.apache.hadoop.hdfs.server.namenode;
 
+import java.io.Serializable;
+
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.fs.permission.PermissionStatus;
@@ -32,8 +34,13 @@ import com.google.common.base.Preconditions;
  */
 @InterfaceAudience.Private
 public abstract class INodeWithAdditionalFields extends INode
-    implements LinkedElement {
-  static enum PermissionStatusFormat {
+    implements LinkedElement, Serializable {
+  /**
+	 * 
+	 */
+	private static final long serialVersionUID = 6880906052217913322L;
+
+static enum PermissionStatusFormat {
     MODE(null, 16),
     GROUP(MODE.BITS, 25),
     USER(GROUP.BITS, 23);

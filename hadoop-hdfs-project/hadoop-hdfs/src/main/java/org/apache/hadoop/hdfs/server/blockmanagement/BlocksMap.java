@@ -28,13 +28,16 @@ import org.apache.hadoop.util.LightWeightGSet;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.collect.Iterables;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * This class maintains the map from a block to its metadata.
  * block's metadata currently includes blockCollection it belongs to and
  * the datanodes that store the block.
  */
-class BlocksMap {
+public class BlocksMap {
+	  public static final Logger LOG = LoggerFactory.getLogger(BlocksMap.class);
   private static class StorageIterator implements Iterator<DatanodeStorageInfo> {
     private final BlockInfoContiguous blockInfo;
     private int nextIdx = 0;
@@ -222,14 +225,16 @@ class BlocksMap {
    * @param newBlock - block for replacement
    * @return new block
    */
-  BlockInfoContiguous replaceBlock(BlockInfoContiguous newBlock) {
+  public BlockInfoContiguous replaceBlock(BlockInfoContiguous newBlock) {
     BlockInfoContiguous currentBlock = blocks.get(newBlock);
     assert currentBlock != null : "the block if not in blocksMap";
     // replace block in data-node lists
+    LOG.info("blockmap numNode " + currentBlock.numNodes());
     for (int i = currentBlock.numNodes() - 1; i >= 0; i--) {
       final DatanodeDescriptor dn = currentBlock.getDatanode(i);
       final DatanodeStorageInfo storage = currentBlock.findStorageInfo(dn);
       final boolean removed = storage.removeBlock(currentBlock);
+      LOG.info("blockmap remove " + removed );
       Preconditions.checkState(removed, "currentBlock not found.");
 
       final AddBlockResult result = storage.addBlock(newBlock);
@@ -240,4 +245,25 @@ class BlocksMap {
     blocks.put(newBlock);
     return newBlock;
   }
+  
+  public BlockInfoContiguous replaceBlock(BlockInfoContiguous oldBlock, BlockInfoContiguous newBlock) {
+	    BlockInfoContiguous currentBlock = blocks.get(oldBlock);
+	    assert currentBlock != null : "the block if not in blocksMap";
+	    // replace block in data-node lists
+	    LOG.info("blockmap numNode " + currentBlock.numNodes());
+	    for (int i = currentBlock.numNodes() - 1; i >= 0; i--) {
+	      final DatanodeDescriptor dn = currentBlock.getDatanode(i);
+	      final DatanodeStorageInfo storage = currentBlock.findStorageInfo(dn);
+	      final boolean removed = storage.removeBlock(currentBlock);
+	      LOG.info("blockmap remove " + removed );
+	      Preconditions.checkState(removed, "currentBlock not found.");
+
+	      final AddBlockResult result = storage.addBlock(newBlock);
+	      Preconditions.checkState(result == AddBlockResult.ADDED,
+	          "newBlock already exists.");
+	    }
+	    // replace block in the map itself
+	    blocks.put(newBlock);
+	    return newBlock;
+	  }
 }

@@ -18,6 +18,7 @@
 package org.apache.hadoop.util;
 
 import java.io.PrintStream;
+import java.io.Serializable;
 import java.util.ConcurrentModificationException;
 import java.util.Iterator;
 
@@ -45,8 +46,13 @@ import com.google.common.annotations.VisibleForTesting;
  *       (2) implementing {@link LinkedElement} interface.
  */
 @InterfaceAudience.Private
-public class LightWeightGSet<K, E extends K> implements GSet<K, E> {
+public class LightWeightGSet<K, E extends K> implements GSet<K, E>, Serializable {
   /**
+	 * 
+	 */
+	private static final long serialVersionUID = 6632788821181838155L;
+
+/**
    * Elements of {@link LightWeightGSet}.
    */
   public static interface LinkedElement {

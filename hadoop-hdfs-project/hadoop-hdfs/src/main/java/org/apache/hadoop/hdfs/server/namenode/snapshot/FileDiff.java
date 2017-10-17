@@ -19,6 +19,7 @@ package org.apache.hadoop.hdfs.server.namenode.snapshot;
 
 import java.io.DataOutput;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.List;
 
@@ -108,6 +109,20 @@ public class FileDiff extends
       FSImageSerialization.writeINodeFileAttributes(snapshotINode, out);
     } else {
       out.writeBoolean(false);
+    }
+  }
+  
+  @Override
+  void write(ByteBuffer out, ReferenceMap referenceMap) throws IOException {
+    writeSnapshot(out);
+    out.putLong(fileSize);
+
+    // write snapshotINode
+    if (snapshotINode != null) {
+      out.put((byte)1);
+      FSImageSerialization.writeINodeFileAttributes(snapshotINode, out);
+    } else {
+      out.put((byte)0);
     }
   }
 

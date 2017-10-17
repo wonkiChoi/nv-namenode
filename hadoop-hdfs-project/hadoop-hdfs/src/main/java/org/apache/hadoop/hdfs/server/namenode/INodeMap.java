@@ -88,10 +88,16 @@ public class INodeMap {
    *         such {@link INode} in the map.
    */
   public INode get(long id) {
-    INode inode = new INodeWithAdditionalFields(id, null, new PermissionStatus(
+
+	INode inode = new INodeWithAdditionalFields(id, null, new PermissionStatus(
         "", "", new FsPermission((short) 0)), 0, 0) {
       
-      @Override
+      /**
+			 * 
+			 */
+			private static final long serialVersionUID = -7626533053726753942L;
+
+	@Override
       void recordModification(int latestSnapshotId) {
       }
       

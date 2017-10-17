@@ -971,8 +971,22 @@ public class NativeIO {
   private static native void copyFileUnbuffered0(String src, String dst)
       throws NativeIOException;
   
-  public static native ByteBuffer allocateNVRAMBuffer(long size)
+  public static native ByteBuffer allocateNVRAMBuffer(long size, long offset)
 		   throws NativeIOException;
+  public static native int putLongToNVRAM(long size, long offset, long data, int index)
+       throws NativeIOException;
+  public static native int putIntToNVRAM(long size, long offset, int data, int index)
+	       throws NativeIOException;
+  public static native int putBAToNVRAM(long size, long offset, byte[] data, int index)
+	       throws NativeIOException;
+  public static native int readIntFromNVRAM(long size, long offset, int index)
+	       throws NativeIOException;
+  public static native long readLongFromNVRAM(long size, long offset, int index)
+	       throws NativeIOException;
+  public static native byte[] readBAFromNVRAM(long size, long offset, int index, int arraysize)
+	       throws NativeIOException;
+  public static native void clFlushFunction(ByteBuffer target, long size)
+       throws NativeIOException;
   public static native void freeNVRAMBuffer(ByteBuffer buf)
 		   throws NativeIOException;
   public static native void addChildren(ByteBuffer Inode, long id, byte [] name, long permission, long modificationTime, long accessTime)

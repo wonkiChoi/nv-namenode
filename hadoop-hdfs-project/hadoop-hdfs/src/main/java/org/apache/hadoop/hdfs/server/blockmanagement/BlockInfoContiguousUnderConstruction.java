@@ -18,6 +18,7 @@
 package org.apache.hadoop.hdfs.server.blockmanagement;
 
 import java.io.IOException;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -31,8 +32,13 @@ import org.apache.hadoop.hdfs.server.namenode.NameNode;
  * Represents a block that is currently being constructed.<br>
  * This is usually the last block of a file opened for write or append.
  */
-public class BlockInfoContiguousUnderConstruction extends BlockInfoContiguous {
-  /** Block state. See {@link BlockUCState} */
+public class BlockInfoContiguousUnderConstruction extends BlockInfoContiguous implements Serializable {
+  /**
+	 * 
+	 */
+	private static final long serialVersionUID = 1189321103568869740L;
+
+/** Block state. See {@link BlockUCState} */
   private BlockUCState blockUCState;
 
   /**
@@ -67,8 +73,13 @@ public class BlockInfoContiguousUnderConstruction extends BlockInfoContiguous {
    * It is not guaranteed, but expected, that data-nodes actually have
    * corresponding replicas.
    */
-  static class ReplicaUnderConstruction extends Block {
-    private final DatanodeStorageInfo expectedLocation;
+  // wk modified static -> public
+  static class ReplicaUnderConstruction extends Block implements Serializable {
+    /**
+	 * 
+	 */
+	private static final long serialVersionUID = 1687250309054788100L;
+	private final DatanodeStorageInfo expectedLocation;
     private ReplicaState state;
     private boolean chosenAsPrimary;
 

@@ -1198,6 +1198,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
   
   public LocatedBlocks getLocatedBlocks(String src, long start)
       throws IOException {
+	  LOG.info("getlocatedblock in dfsclient = " + getLocatedBlocks(src, start, dfsClientConf.prefetchSize).toString());
     return getLocatedBlocks(src, start, dfsClientConf.prefetchSize);
   }
 

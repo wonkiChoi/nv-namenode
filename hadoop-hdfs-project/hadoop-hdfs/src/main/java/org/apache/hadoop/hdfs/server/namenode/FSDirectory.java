@@ -73,7 +73,9 @@ import org.slf4j.LoggerFactory;
 import java.io.Closeable;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumSet;
@@ -104,6 +106,8 @@ import static org.apache.hadoop.util.Time.now;
 @InterfaceAudience.Private
 public class FSDirectory implements Closeable {
   static final Logger LOG = LoggerFactory.getLogger(FSDirectory.class);
+private static final int SIZE = 10000;
+  public static int MAP_SIZE = 4096;
   private static INodeDirectory createRoot(FSNamesystem namesystem) {
     final INodeDirectory r = new INodeDirectory(
         INodeId.ROOT_INODE_ID,
@@ -119,25 +123,85 @@ public class FSDirectory implements Closeable {
     r.setSnapshotQuota(0);
     return r;
   }
-  
-  private static ByteBuffer createRoot(FSNamesystem namesystem, boolean nvram_enabled) throws NativeIOException, IOException {
-	    ByteBuffer root;
+  private static INodeDirectory createRoot(FSNamesystem namesystem, boolean nvram_enabled) throws NativeIOException, IOException {
 	    final INodeDirectory r = new INodeDirectory(
 	            INodeId.ROOT_INODE_ID,
 	            INodeDirectory.ROOT_NAME,
 	            namesystem.createFsOwnerPermissions(new FsPermission((short) 0755)),
 	            0L);
-	        r.addDirectoryWithQuotaFeature(
-	            new DirectoryWithQuotaFeature.Builder().
-	                nameSpaceQuota(DirectoryWithQuotaFeature.DEFAULT_NAMESPACE_QUOTA).
-	                storageSpaceQuota(DirectoryWithQuotaFeature.DEFAULT_STORAGE_SPACE_QUOTA).
-	                build());
-	        r.addSnapshottableFeature();
-	        r.setSnapshotQuota(0);
-	    byte [] rootDir = BytesUtil.toByteArray(r);
-	    root = NativeIO.allocateNVRAMBuffer(rootDir.length);
-	    root.put(rootDir);
-	    return root;
+	    
+	    r.addDirectoryWithQuotaFeature(
+	          new DirectoryWithQuotaFeature.Builder().
+	              nameSpaceQuota(DirectoryWithQuotaFeature.DEFAULT_NAMESPACE_QUOTA).
+	              storageSpaceQuota(DirectoryWithQuotaFeature.DEFAULT_STORAGE_SPACE_QUOTA).
+	              build());
+	    r.addSnapshottableFeature();
+	    r.setSnapshotQuota(0);
+	    //r.children_for_nvram = NativeIO.allocateNVRAMBuffer(1024*1024*1024, 4096).order(ByteOrder.nativeOrder());
+	   // r.children_for_nvram = NativeIO.allocateNVRAMBuffer(1024*1024*1024, 4096);
+	   //r.children_for_nvram = new ByteBuffer[SIZE];
+	   //r.children_for_nvram = NativeIO.allocateNVRAMBuffer(4096, 4096);
+		 int inode_num = 0;
+	   int off = NativeIO.putIntToNVRAM(4096, 4096, inode_num, 0);
+	    //r.children_for_nvram = ByteBuffer.allocateDirect(3000);
+//	   LOG.info("nvram size = " + r.children_for_nvram.capacity() + " ByteOrder = " + r.children_for_nvram.order());
+//		 LOG.info("limit size = " + r.children_for_nvram.limit());
+
+		// int inode_num = 0; //except root
+		 //int last_position = 0;
+		 //r.children_for_nvram.putInt(inode_num);
+		 //r.children_for_nvram.putInt(last_position);
+		// LOG.info("last_postion1 =" + last_position + " buf = " + r.children_for_nvram);
+		 //last_position = r.children_for_nvram.position();
+		 //LOG.info("last_postion2 =" + last_position + " buf = " + r.children_for_nvram);
+		// r.children_for_nvram.position(4);
+		 //r.children_for_nvram.putInt(last_position);
+		// LOG.info("last_postion3 =" + last_position + " buf = " + r.children_for_nvram);
+		 //r.children_for_nvram.clear();
+
+//		 try {
+//		 NativeIO.freeNVRAMBuffer(r.children_for_nvram);
+//		 } catch (NativeIOException e) {
+//			 LOG.info(e.getMessage());
+//		 }
+	    return r;
+	  }
+//  private static ByteBuffer createRoot(FSNamesystem namesystem, boolean nvram_enabled) throws NativeIOException, IOException {
+//	    ByteBuffer root;
+//	    final INodeDirectory r = new INodeDirectory(
+//	            INodeId.ROOT_INODE_ID,
+//	            INodeDirectory.ROOT_NAME,
+//	            namesystem.createFsOwnerPermissions(new FsPermission((short) 0755)),
+//	            0L);
+//	        r.addDirectoryWithQuotaFeature(
+//	            new DirectoryWithQuotaFeature.Builder().
+//	                nameSpaceQuota(DirectoryWithQuotaFeature.DEFAULT_NAMESPACE_QUOTA).
+//	                storageSpaceQuota(DirectoryWithQuotaFeature.DEFAULT_STORAGE_SPACE_QUOTA).
+//	                build());
+//	        r.addSnapshottableFeature();
+//	        r.setSnapshotQuota(0);
+//	    byte [] rootDir = BytesUtil.toByteArray(r);
+//	    root = NativeIO.allocateNVRAMBuffer(rootDir.length);
+//	    root = NativeIO.allocateNVRAMBuffer(MAP_SIZE);
+//	    root.put(rootDir);
+//	    return root;
+//	  }
+  
+  private static INodeDirectory createRoot(FSNamesystem namesystem, boolean nvram_enabled, boolean recovery) throws NativeIOException, IOException {
+	    final INodeDirectory r = new INodeDirectory(
+	            INodeId.ROOT_INODE_ID,
+	            INodeDirectory.ROOT_NAME,
+	            namesystem.createFsOwnerPermissions(new FsPermission((short) 0755)),
+	            0L);
+	    r.addDirectoryWithQuotaFeature(
+	          new DirectoryWithQuotaFeature.Builder().
+	              nameSpaceQuota(DirectoryWithQuotaFeature.DEFAULT_NAMESPACE_QUOTA).
+	              storageSpaceQuota(DirectoryWithQuotaFeature.DEFAULT_STORAGE_SPACE_QUOTA).
+	              build());
+	    r.addSnapshottableFeature();
+	    r.setSnapshotQuota(0);
+	    r.children_for_nvram = NativeIO.allocateNVRAMBuffer(1024, 4096);
+	    return r;
 	  }
 
   @VisibleForTesting
@@ -336,13 +400,106 @@ public class FSDirectory implements Closeable {
   FSDirectory(FSNamesystem ns, Configuration conf, boolean nvram_enabled) throws IOException, NativeIOException {
 	    this.dirLock = new ReentrantReadWriteLock(true); // fair
 	    this.inodeId = new INodeId();
-	    rootDir = createRoot(ns);
+	    rootDir = createRoot(ns, nvram_enabled);
 	    inodeMap = INodeMap.newInstance(rootDir);
-	    if(nvram_enabled == true) {
-	       	rootByte = createRoot(ns, nvram_enabled);
-   	     inodeByteMap = NativeIO.allocateNVRAMBuffer(4096 * 4096);
-	   	    }
+	   // if(nvram_enabled == true) {
+	       //	rootByte = createRoot(ns, nvram_enabled);
+   	     //inodeByteMap = NativeIO.allocateNVRAMBuffer(4096 * 4096);
+	   	   // }
    	    this.isPermissionEnabled = conf.getBoolean(
+	      DFSConfigKeys.DFS_PERMISSIONS_ENABLED_KEY,
+	      DFSConfigKeys.DFS_PERMISSIONS_ENABLED_DEFAULT);
+	    this.fsOwnerShortUserName =
+	      UserGroupInformation.getCurrentUser().getShortUserName();
+	    this.supergroup = conf.get(
+	      DFSConfigKeys.DFS_PERMISSIONS_SUPERUSERGROUP_KEY,
+	      DFSConfigKeys.DFS_PERMISSIONS_SUPERUSERGROUP_DEFAULT);
+	    this.aclsEnabled = conf.getBoolean(
+	        DFSConfigKeys.DFS_NAMENODE_ACLS_ENABLED_KEY,
+	        DFSConfigKeys.DFS_NAMENODE_ACLS_ENABLED_DEFAULT);
+	    LOG.info("ACLs enabled? " + aclsEnabled);
+	    this.xattrsEnabled = conf.getBoolean(
+	        DFSConfigKeys.DFS_NAMENODE_XATTRS_ENABLED_KEY,
+	        DFSConfigKeys.DFS_NAMENODE_XATTRS_ENABLED_DEFAULT);
+	    LOG.info("XAttrs enabled? " + xattrsEnabled);
+	    this.xattrMaxSize = conf.getInt(
+	        DFSConfigKeys.DFS_NAMENODE_MAX_XATTR_SIZE_KEY,
+	        DFSConfigKeys.DFS_NAMENODE_MAX_XATTR_SIZE_DEFAULT);
+	    Preconditions.checkArgument(xattrMaxSize >= 0,
+	                                "Cannot set a negative value for the maximum size of an xattr (%s).",
+	                                DFSConfigKeys.DFS_NAMENODE_MAX_XATTR_SIZE_KEY);
+	    final String unlimited = xattrMaxSize == 0 ? " (unlimited)" : "";
+	    LOG.info("Maximum size of an xattr: " + xattrMaxSize + unlimited);
+
+	    this.accessTimePrecision = conf.getLong(
+	        DFS_NAMENODE_ACCESSTIME_PRECISION_KEY,
+	        DFS_NAMENODE_ACCESSTIME_PRECISION_DEFAULT);
+
+	    this.storagePolicyEnabled =
+	        conf.getBoolean(DFS_STORAGE_POLICY_ENABLED_KEY,
+	                        DFS_STORAGE_POLICY_ENABLED_DEFAULT);
+
+	    this.quotaByStorageTypeEnabled =
+	        conf.getBoolean(DFS_QUOTA_BY_STORAGETYPE_ENABLED_KEY,
+	                        DFS_QUOTA_BY_STORAGETYPE_ENABLED_DEFAULT);
+
+	    int configuredLimit = conf.getInt(
+	        DFSConfigKeys.DFS_LIST_LIMIT, DFSConfigKeys.DFS_LIST_LIMIT_DEFAULT);
+	    this.lsLimit = configuredLimit>0 ?
+	        configuredLimit : DFSConfigKeys.DFS_LIST_LIMIT_DEFAULT;
+	    this.contentCountLimit = conf.getInt(
+	        DFSConfigKeys.DFS_CONTENT_SUMMARY_LIMIT_KEY,
+	        DFSConfigKeys.DFS_CONTENT_SUMMARY_LIMIT_DEFAULT);
+	    this.contentSleepMicroSec = conf.getLong(
+	        DFSConfigKeys.DFS_CONTENT_SUMMARY_SLEEP_MICROSEC_KEY,
+	        DFSConfigKeys.DFS_CONTENT_SUMMARY_SLEEP_MICROSEC_DEFAULT);
+	    
+	    // filesystem limits
+	    this.maxComponentLength = conf.getInt(
+	        DFSConfigKeys.DFS_NAMENODE_MAX_COMPONENT_LENGTH_KEY,
+	        DFSConfigKeys.DFS_NAMENODE_MAX_COMPONENT_LENGTH_DEFAULT);
+	    this.maxDirItems = conf.getInt(
+	        DFSConfigKeys.DFS_NAMENODE_MAX_DIRECTORY_ITEMS_KEY,
+	        DFSConfigKeys.DFS_NAMENODE_MAX_DIRECTORY_ITEMS_DEFAULT);
+	    this.inodeXAttrsLimit = conf.getInt(
+	        DFSConfigKeys.DFS_NAMENODE_MAX_XATTRS_PER_INODE_KEY,
+	        DFSConfigKeys.DFS_NAMENODE_MAX_XATTRS_PER_INODE_DEFAULT);
+
+	    Preconditions.checkArgument(this.inodeXAttrsLimit >= 0,
+	        "Cannot set a negative limit on the number of xattrs per inode (%s).",
+	        DFSConfigKeys.DFS_NAMENODE_MAX_XATTRS_PER_INODE_KEY);
+	    // We need a maximum maximum because by default, PB limits message sizes
+	    // to 64MB. This means we can only store approximately 6.7 million entries
+	    // per directory, but let's use 6.4 million for some safety.
+	    final int MAX_DIR_ITEMS = 64 * 100 * 1000;
+	    Preconditions.checkArgument(
+	        maxDirItems > 0 && maxDirItems <= MAX_DIR_ITEMS, "Cannot set "
+	            + DFSConfigKeys.DFS_NAMENODE_MAX_DIRECTORY_ITEMS_KEY
+	            + " to a value less than 1 or greater than " + MAX_DIR_ITEMS);
+
+	    int threshold = conf.getInt(
+	        DFSConfigKeys.DFS_NAMENODE_NAME_CACHE_THRESHOLD_KEY,
+	        DFSConfigKeys.DFS_NAMENODE_NAME_CACHE_THRESHOLD_DEFAULT);
+	    NameNode.LOG.info("Caching file names occuring more than " + threshold
+	        + " times");
+	    nameCache = new NameCache<ByteArray>(threshold);
+	    namesystem = ns;
+	    this.editLog = ns.getEditLog();
+	    ezManager = new EncryptionZoneManager(this, conf);
+	    this.nvram_enabled = nvram_enabled;
+	    LOG.info("nvram_enabled in FSDirectory = " + nvram_enabled);
+	  }
+  
+  FSDirectory(FSNamesystem ns, Configuration conf, boolean nvram_enabled, boolean recovery) throws IOException, NativeIOException {
+	    this.dirLock = new ReentrantReadWriteLock(true); // fair
+	    this.inodeId = new INodeId();
+	    rootDir = createRoot(ns, nvram_enabled, recovery);
+	    inodeMap = INodeMap.newInstance(rootDir);
+//	    if(nvram_enabled == true && recovery == true) {
+//	       	rootByte = createRoot(ns, nvram_enabled, recovery);
+// 	     inodeByteMap = NativeIO.allocateNVRAMBuffer(4096 * 4096);
+//	   	    }
+ 	    this.isPermissionEnabled = conf.getBoolean(
 	      DFSConfigKeys.DFS_PERMISSIONS_ENABLED_KEY,
 	      DFSConfigKeys.DFS_PERMISSIONS_ENABLED_DEFAULT);
 	    this.fsOwnerShortUserName =
@@ -546,6 +703,9 @@ public class FSDirectory implements Closeable {
     INodesInPath newiip;
     writeLock();
     try {
+    	boolean test = this.getEnabled();
+    	LOG.info("nvram_enabled in addINode = " + this.nvram_enabled);
+    	LOG.info("test = " + test);
       newiip = addINode(existing, newNode, this.nvram_enabled);
     } finally {
       writeUnlock();
@@ -607,6 +767,7 @@ public class FSDirectory implements Closeable {
       Block block, DatanodeStorageInfo[] targets) throws IOException {
     writeLock();
     try {
+    	LOG.info("addBlock call");
       final INodeFile fileINode = inodesInPath.getLastINode().asFile();
       Preconditions.checkState(fileINode.isUnderConstruction());
 
@@ -623,7 +784,31 @@ public class FSDirectory implements Closeable {
             targets);
       getBlockManager().addBlockCollection(blockInfo, fileINode);
       fileINode.addBlock(blockInfo);
-
+      if(nvram_enabled) {
+    	BlockInfoContiguous tec = getBlockManager().getStoredBlock(blockInfo);
+      rootDir.removeChild(fileINode, nvram_enabled);
+      rootDir.addChild(fileINode, true, CURRENT_STATE_ID, this.nvram_enabled);
+      INodeFile test = (INodeFile) rootDir.getChild(fileINode.getLocalNameBytes(), CURRENT_STATE_ID, this.nvram_enabled);
+  	  BlockInfoContiguous tec2 = getBlockManager().getStoredBlock(test.getLastBlock());
+      NameNode.stateChangeLog.info("BLOCK* allocate " + tec2 + " for testing ");
+      LOG.info("here is add block num node = " + tec2.numNodes());
+//      BlockInfoContiguousUnderConstruction newblock =
+//    	        new BlockInfoContiguousUnderConstruction(
+//    	            block,
+//    	            fileINode.getFileReplication(),
+//    	            BlockUCState.COMPLETE,
+//    	            targets);
+//      getBlockManager().blocksMap.replaceBlock(newblock);
+//      getBlockManager().checkReplication(test);
+  	  int equal = tec.compareTo(tec2);
+  	  if(equal == 0) {
+  		  
+  		  LOG.info("blockmanager equal!!!!!");
+  	  } else {
+  		  LOG.info("blockManager is not equal!!!!");
+  	
+  	  }
+      }
       if(NameNode.stateChangeLog.isDebugEnabled()) {
         NameNode.stateChangeLog.debug("DIR* FSDirectory.addBlock: "
             + path + " with " + block
@@ -962,7 +1147,7 @@ public class FSDirectory implements Closeable {
     cacheName(child);
     writeLock();
     try {
-      return addLastINode(existing, child, true, nvram_enabled);
+      return addLastINode(existing, child, true);
     } finally {
       writeUnlock();
     }
@@ -1146,6 +1331,7 @@ public class FSDirectory implements Closeable {
         existing.getLastINode().isDirectory();
 
     final int pos = existing.length();
+
     // Disallow creation of /.reserved. This may be created when loading
     // editlog/fsimage during upgrade since /.reserved was a valid name in older
     // release. This may also be called when a user tries to create a file
@@ -1157,6 +1343,9 @@ public class FSDirectory implements Closeable {
               + "existing file or directory to another name before upgrading "
               + "to the new release.");
     }
+    LOG.info("full path = " + existing.getPath() + " inode = " + inode.getFullPathName() );
+    LOG.info("path = " + existing.getINode(pos - 1).getFullPathName());
+    
     final INodeDirectory parent = existing.getINode(pos - 1).asDirectory();
     // The filesystem limits are not really quotas, so this check may appear
     // odd. It's because a rename operation deletes the src, tries to add
@@ -1178,7 +1367,9 @@ public class FSDirectory implements Closeable {
     boolean isRename = (inode.getParent() != null);
     boolean added;
     try {
+    	LOG.info("nvram_enabled in addChild = " + nvram_enabled);
       added = parent.addChild(inode, true, existing.getLatestSnapshotId(), nvram_enabled);
+      LOG.info("add =" + added);
     } catch (QuotaExceededException e) {
       updateCountNoQuotaCheck(existing, pos, counts.negation());
       throw e;
@@ -1195,13 +1386,23 @@ public class FSDirectory implements Closeable {
     return INodesInPath.append(existing, inode, inode.getLocalNameBytes());
   }
 
-  INodesInPath addLastINodeNoQuotaCheck(INodesInPath existing, INode i) {
-    try {
+  INodesInPath addLastINodeNoQuotaCheck(INodesInPath existing, INode i, boolean nvram_enabled) {
+  if(nvram_enabled == true) {
+	  LOG.info("addLastINode No QuotaCheck");
+	  try {
+	      return addLastINode(existing, i, false, nvram_enabled);
+	    } catch (QuotaExceededException e) {
+	      NameNode.LOG.warn("FSDirectory.addChildNoQuotaCheck - unexpected", e);
+	    }
+	    return null;
+  } else {
+	  try {
       return addLastINode(existing, i, false);
     } catch (QuotaExceededException e) {
       NameNode.LOG.warn("FSDirectory.addChildNoQuotaCheck - unexpected", e);
     }
     return null;
+  }
   }
 
   /**
@@ -1225,6 +1426,18 @@ public class FSDirectory implements Closeable {
     return (!last.isInLatestSnapshot(latestSnapshot)
         && INodeReference.tryRemoveReference(last) > 0) ? 0 : 1;
   }
+  
+  public long removeLastINode(final INodesInPath iip, boolean nvram_enabled) {
+	    final int latestSnapshot = iip.getLatestSnapshotId();
+	    final INode last = iip.getLastINode();
+	    final INodeDirectory parent = iip.getINode(-2).asDirectory();
+	    if (!parent.removeChild(last, latestSnapshot, nvram_enabled)) {
+	      return -1;
+	    }
+
+	    return (!last.isInLatestSnapshot(latestSnapshot)
+	        && INodeReference.tryRemoveReference(last) > 0) ? 0 : 1;
+	  }
 
   static String normalizePath(String src) {
     if (src.length() > 1 && src.endsWith("/")) {
@@ -1784,7 +1997,8 @@ public class FSDirectory implements Closeable {
 
   INodesInPath getExistingPathINodes(byte[][] components)
       throws UnresolvedLinkException {
-    return INodesInPath.resolve(rootDir, rootByte, components, false, nvram_enabled);
+	  LOG.info("getExistingPathInode");
+    return INodesInPath.resolve(rootDir, components, false, nvram_enabled);
   }
 
   /**
@@ -1808,7 +2022,8 @@ public class FSDirectory implements Closeable {
   public INodesInPath getINodesInPath(String path, boolean resolveLink)
       throws UnresolvedLinkException {
     final byte[][] components = INode.getPathComponents(path);
-    return INodesInPath.resolve(rootDir, rootByte, components, resolveLink, nvram_enabled);
+    LOG.info("getINodesInPath22");
+    return INodesInPath.resolve(rootDir, components, resolveLink, nvram_enabled);
   }
 
   /** @return the last inode in the path. */
@@ -1832,7 +2047,8 @@ public class FSDirectory implements Closeable {
   INodesInPath getINodesInPath4Write(String src, boolean resolveLink)
           throws UnresolvedLinkException, SnapshotAccessControlException {
     final byte[][] components = INode.getPathComponents(src);
-    INodesInPath inodesInPath = INodesInPath.resolve(rootDir, rootByte, components,
+    LOG.info("getINodeInPath4Write is here");
+    INodesInPath inodesInPath = INodesInPath.resolve(rootDir, components,
         resolveLink, nvram_enabled);
     if (inodesInPath.isSnapshot()) {
       throw new SnapshotAccessControlException(

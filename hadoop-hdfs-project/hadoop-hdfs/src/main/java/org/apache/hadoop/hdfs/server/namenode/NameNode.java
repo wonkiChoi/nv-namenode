@@ -1030,6 +1030,7 @@ public class NameNode implements NameNodeStatusMXBean {
 	    FSImage fsImage = new FSImage(conf, nameDirsToFormat, editDirsToFormat, true);
 	    try {
 	      FSNamesystem fsn = new FSNamesystem(conf, fsImage, false, true);
+	      LOG.info("nvram format = " + fsn.dir.nvram_enabled);
 	      fsImage.getEditLog().initJournalsForWrite();
 
 	      if (!fsImage.confirmFormat(force, isInteractive)) {
@@ -1473,6 +1474,41 @@ public class NameNode implements NameNodeStatusMXBean {
     }
   }
 
+  private static void doRecovery(StartupOption startOpt, Configuration conf, boolean nvram_enabled)
+	      throws IOException {
+	    String nsId = DFSUtil.getNamenodeNameServiceId(conf);
+	    String namenodeId = HAUtil.getNameNodeId(conf, nsId);
+	    initializeGenericKeys(conf, nsId, namenodeId);
+	    if (startOpt.getForce() < MetaRecoveryContext.FORCE_ALL) {
+	      if (!confirmPrompt("You have selected Metadata Recovery mode.  " +
+	          "This mode is intended to recover lost metadata on a corrupt " +
+	          "filesystem.  Metadata recovery mode often permanently deletes " +
+	          "data from your HDFS filesystem.  Please back up your edit log " +
+	          "and fsimage before trying this!\n\n" +
+	          "Are you ready to proceed? (Y/N)\n")) {
+	        System.err.println("Recovery aborted at user request.\n");
+	        return;
+	      }
+	    }
+	    MetaRecoveryContext.LOG.info("starting recovery...");
+	    UserGroupInformation.setConfiguration(conf);
+	    NameNode.initMetrics(conf, startOpt.toNodeRole());
+	    FSNamesystem fsn = null;
+	    try {
+	      fsn = FSNamesystem.loadFromDisk(conf, true);
+	      fsn.getFSImage().saveNamespace(fsn);
+	      MetaRecoveryContext.LOG.info("RECOVERY COMPLETE");
+	    } catch (IOException e) {
+	      MetaRecoveryContext.LOG.info("RECOVERY FAILED: caught exception", e);
+	      throw e;
+	    } catch (RuntimeException e) {
+	      MetaRecoveryContext.LOG.info("RECOVERY FAILED: caught exception", e);
+	      throw e;
+	    } finally {
+	      if (fsn != null)
+	        fsn.close();
+	    }
+	  }
   /**
    * Verify that configured directories exist, then print the metadata versions
    * of the software and the image.
@@ -1517,8 +1553,9 @@ public class NameNode implements NameNodeStatusMXBean {
       case NVRAM: {
         boolean aborted = format_nvram(conf, startOpt.getForceFormat(),
             startOpt.getInteractiveFormat());
-        nvram_mmap nv = new nvram_mmap();
-        nv.nvram_mmap_test(4);
+        LOG.info("NVRAM Format");
+        //nvram_mmap nv = new nvram_mmap();
+        //nv.nvram_mmap_test(4);
         terminate(aborted ? 1 : 0);
         return null; 
     	  
@@ -1564,6 +1601,10 @@ public class NameNode implements NameNodeStatusMXBean {
         NameNode.doRecovery(startOpt, conf);
         return null;
       }
+      case RECOVER_NVRAM: {
+          NameNode.doRecovery(startOpt, conf, true);
+          return null;
+        }
       case METADATAVERSION: {
         printMetadataVersion(conf);
         terminate(0);

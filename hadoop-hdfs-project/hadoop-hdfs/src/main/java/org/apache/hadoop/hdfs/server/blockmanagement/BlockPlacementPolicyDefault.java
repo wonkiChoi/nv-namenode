@@ -29,6 +29,9 @@ import org.apache.hadoop.hdfs.DFSConfigKeys;
 import org.apache.hadoop.hdfs.DFSUtil;
 import org.apache.hadoop.hdfs.protocol.DatanodeInfo;
 import org.apache.hadoop.hdfs.protocol.HdfsConstants;
+import org.apache.hadoop.hdfs.server.namenode.FSDirectory;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.hdfs.server.protocol.DatanodeStorage.State;
 import org.apache.hadoop.net.NetworkTopology;
 import org.apache.hadoop.net.Node;
@@ -47,7 +50,7 @@ import com.google.common.annotations.VisibleForTesting;
  */
 @InterfaceAudience.Private
 public class BlockPlacementPolicyDefault extends BlockPlacementPolicy {
-
+	static final Log LOG = LogFactory.getLog(BlockPlacementPolicyDefault.class);
   private static final String enableDebugLogging =
     "For more information, please enable DEBUG log level on "
     + BlockPlacementPolicy.class.getName();
@@ -194,6 +197,7 @@ public class BlockPlacementPolicyDefault extends BlockPlacementPolicy {
                                     long blocksize,
                                     final BlockStoragePolicy storagePolicy) {
     if (numOfReplicas == 0 || clusterMap.getNumOfLeaves()==0) {
+    	LOG.info("cluster map ? " + numOfReplicas + clusterMap.getNumOfLeaves());
       return DatanodeStorageInfo.EMPTY_ARRAY;
     }
       

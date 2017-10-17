@@ -36,9 +36,12 @@ import org.apache.commons.lang.ArrayUtils;
  *
  * @param <E> the enum type
  */
-@SuppressWarnings("serial")
 public class EnumCounters<E extends Enum<E>> implements Serializable {
-  /** The class of the enum. */
+  /**
+	 * 
+	 */
+	private static final long serialVersionUID = -9024505204924660006L;
+/** The class of the enum. */
   private final Class<E> enumClass;
   /** An array of longs corresponding to the enum type. */
   private final long[] counters;

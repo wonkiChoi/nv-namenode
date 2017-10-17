@@ -51,10 +51,14 @@ import com.google.common.base.Preconditions;
  * This is a base INode class containing common fields for file and 
  * directory inodes.
  */
-@SuppressWarnings("serial")
 @InterfaceAudience.Private
 public abstract class INode implements INodeAttributes, Diff.Element<byte[]>, Serializable {
-  public static final Log LOG = LogFactory.getLog(INode.class);
+  /**
+	 * 
+	 */
+	private static final long serialVersionUID = 3280668222209698603L;
+
+public static final Log LOG = LogFactory.getLog(INode.class);
 
   /** parent is either an {@link INodeDirectory} or an {@link INodeReference}.*/
   private INode parent = null;
@@ -828,8 +832,12 @@ public abstract class INode implements INodeAttributes, Diff.Element<byte[]>, Se
   /**
    * Information used for updating the blocksMap when deleting files.
    */
-  public static class BlocksMapUpdateInfo {
+  public static class BlocksMapUpdateInfo implements Serializable {
     /**
+	 * 
+	 */
+	private static final long serialVersionUID = -6467927271665142911L;
+	/**
      * The list of blocks that need to be removed from blocksMap
      */
     private final List<Block> toDeleteList;

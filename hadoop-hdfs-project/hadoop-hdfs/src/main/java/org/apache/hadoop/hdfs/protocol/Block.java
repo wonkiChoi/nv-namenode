@@ -18,6 +18,7 @@
 package org.apache.hadoop.hdfs.protocol;
 
 import java.io.*;
+import java.nio.ByteBuffer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -33,8 +34,12 @@ import org.apache.hadoop.io.*;
  **************************************************/
 @InterfaceAudience.Private
 @InterfaceStability.Evolving
-public class Block implements Writable, Comparable<Block> {
-  public static final String BLOCK_FILE_PREFIX = "blk_";
+public class Block implements Writable, Comparable<Block>, Serializable {
+  /**
+	 * 
+	 */
+	private static final long serialVersionUID = 5159171071598742040L;
+public static final String BLOCK_FILE_PREFIX = "blk_";
   public static final String METADATA_EXTENSION = ".meta";
   static {                                      // register a ctor
     WritableFactories.setFactory
@@ -175,17 +180,30 @@ public class Block implements Writable, Comparable<Block> {
   public void write(DataOutput out) throws IOException {
     writeHelper(out);
   }
+  public void write(ByteBuffer out) throws IOException {
+	    writeHelper(out);
+	  }
 
   @Override // Writable
   public void readFields(DataInput in) throws IOException {
     readHelper(in);
   }
   
+  public void readFields(ByteBuffer in) throws IOException {
+	    readHelper(in);
+	  }
+  
   final void writeHelper(DataOutput out) throws IOException {
     out.writeLong(blockId);
     out.writeLong(numBytes);
     out.writeLong(generationStamp);
   }
+  
+  final void writeHelper(ByteBuffer out) throws IOException {
+	    out.putLong(blockId);
+	    out.putLong(numBytes);
+	    out.putLong(generationStamp);
+	  }
   
   final void readHelper(DataInput in) throws IOException {
     this.blockId = in.readLong();
@@ -195,6 +213,15 @@ public class Block implements Writable, Comparable<Block> {
       throw new IOException("Unexpected block size: " + numBytes);
     }
   }
+  
+  final void readHelper(ByteBuffer in) throws IOException {
+	    this.blockId = in.getLong();
+	    this.numBytes = in.getLong();
+	    this.generationStamp = in.getLong();
+	    if (numBytes < 0) {
+	      throw new IOException("Unexpected block size: " + numBytes);
+	    }
+	  }
   
   // write only the identifier part of the block
   public void writeId(DataOutput out) throws IOException {

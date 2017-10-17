@@ -17,6 +17,7 @@
  */
 package org.apache.hadoop.hdfs.server.blockmanagement;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.Collection;
@@ -59,8 +60,12 @@ import org.apache.hadoop.util.Time;
  */
 @InterfaceAudience.Private
 @InterfaceStability.Evolving
-public class DatanodeDescriptor extends DatanodeInfo {
-  public static final Log LOG = LogFactory.getLog(DatanodeDescriptor.class);
+public class DatanodeDescriptor extends DatanodeInfo implements Serializable {
+  /**
+	 * 
+	 */
+	private static final long serialVersionUID = 3819013702603583295L;
+public static final Log LOG = LogFactory.getLog(DatanodeDescriptor.class);
   public static final DatanodeDescriptor[] EMPTY_ARRAY = {};
 
   // Stores status of decommissioning.
@@ -88,7 +93,7 @@ public class DatanodeDescriptor extends DatanodeInfo {
   /** Block and targets pair */
   @InterfaceAudience.Private
   @InterfaceStability.Evolving
-  public static class BlockTargetPair {
+  public static class BlockTargetPair implements Serializable {
     public final Block block;
     public final DatanodeStorageInfo[] targets;    
 
@@ -99,7 +104,7 @@ public class DatanodeDescriptor extends DatanodeInfo {
   }
 
   /** A BlockTargetPair queue. */
-  private static class BlockQueue<E> {
+  private static class BlockQueue<E> implements Serializable {
     private final Queue<E> blockq = new LinkedList<E>();
 
     /** Size of the queue */
@@ -141,7 +146,7 @@ public class DatanodeDescriptor extends DatanodeInfo {
   /**
    * A list of CachedBlock objects on this datanode.
    */
-  public static class CachedBlocksList extends IntrusiveCollection<CachedBlock> {
+  public static class CachedBlocksList extends IntrusiveCollection<CachedBlock> implements Serializable {
     public enum Type {
       PENDING_CACHED,
       CACHED,
@@ -535,7 +540,7 @@ public class DatanodeDescriptor extends DatanodeInfo {
     }
   }
 
-  private static class BlockIterator implements Iterator<BlockInfoContiguous> {
+  private static class BlockIterator implements Iterator<BlockInfoContiguous>, Serializable {
     private int index = 0;
     private final List<Iterator<BlockInfoContiguous>> iterators;
     
@@ -736,8 +741,12 @@ public class DatanodeDescriptor extends DatanodeInfo {
   }
 
   /** Decommissioning status */
-  public class DecommissioningStatus {
-    private int underReplicatedBlocks;
+  public class DecommissioningStatus implements Serializable {
+    /**
+	 * 
+	 */
+	private static final long serialVersionUID = 1595696688146564301L;
+	private int underReplicatedBlocks;
     private int decommissionOnlyReplicas;
     private int underReplicatedInOpenFiles;
     private long startTime;

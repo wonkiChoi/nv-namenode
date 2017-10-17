@@ -108,7 +108,7 @@ find_package(ZLIB REQUIRED)
 SET(CMAKE_FIND_LIBRARY_SUFFIXES ${STORED_CMAKE_FIND_LIBRARY_SUFFIXES})
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g -Wall -O2")
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DPLATFORM_HOST")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DPLATFORM_HOST -pthread")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D_REENTRANT -D_GNU_SOURCE")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64")
 set(D main/native/src/org/apache/hadoop)
@@ -268,6 +268,8 @@ if (NEED_LINK_DL)
    set(LIB_DL dl)
 endif (NEED_LINK_DL)
 
+#LINK_DIRECTORIES( /home/skt_test/hadoop-2.7.3-src/hadoop-common-project/hadoop-common/src/main/native/src/org/apache/hadoop/io/nativeio/api/ )
+#LINK_LIBRARIES( pmcnvram )
 IF (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
     #
     # By embedding '$ORIGIN' into the RPATH of libhadoop.so,
@@ -281,7 +283,7 @@ IF (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
     SET_TARGET_PROPERTIES(hadoop 
         PROPERTIES INSTALL_RPATH "${RPATH}")
 ENDIF()
-
+target_link_libraries(hadoop /home/skt_test/hadoop-2.7.3-src/hadoop-common-project/hadoop-common/src/main/native/src/org/apache/hadoop/io/nativeio/api/libpmcnvram.a)
 target_link_dual_libraries(hadoop
     ${LIB_DL}
     ${JAVA_JVM_LIBRARY}

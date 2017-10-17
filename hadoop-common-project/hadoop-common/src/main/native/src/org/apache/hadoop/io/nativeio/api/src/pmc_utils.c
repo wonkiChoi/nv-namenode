@@ -317,7 +317,8 @@ uint32_t pmc_ioctl_send(dev_handle_t dev_handle, int command, nvme_arg_s * arg)
     {
         PMCLOG_3(PMCLOG_ERROR, "PMC NVMe command (opCode 0x%X) ioctl failed, errno %d (%s).\n",
                  arg->nvme_cmd.header.opCode, errno, strerror(errno));
-        return (P_STATUS_HOST_OS_ERROR);
+        //return (P_STATUS_HOST_OS_ERROR);
+	return 12345;
     }
 
 
@@ -338,7 +339,8 @@ uint32_t pmc_ioctl_send(dev_handle_t dev_handle, int command, nvme_arg_s * arg)
                      arg->nvme_cmd.header.opCode, uio.status);
         }
 
-        return (err);           /* TBD - convert to P_STATUS value */
+        //return (err);           /* TBD - convert to P_STATUS value */
+	return P_STATUS_TEMP;
     }
 
 
@@ -476,7 +478,8 @@ uint32_t inbox_ioctl_send(dev_handle_t dev_handle, int command, nvme_arg_s * arg
         if (mem_page_size <= 0)
         {
             // error is printed by OSSRV_getpagesize
-            return (P_STATUS_HOST_OS_ERROR);
+            //return (P_STATUS_HOST_OS_ERROR);
+	    return P_STATUS_TEMP4;
         }
 
         /* alocate a new page aligned PRP buffer */
@@ -501,7 +504,8 @@ uint32_t inbox_ioctl_send(dev_handle_t dev_handle, int command, nvme_arg_s * arg
                 break;
             }
 
-            return (P_STATUS_HOST_OS_ERROR);
+           // return (P_STATUS_HOST_OS_ERROR);
+	      return P_STATUS_TEMP2;
         }
 
         /* Before ioctl: copy the original PRP data into the new page aligned PRP buffer and use it in the NVMe command */
@@ -521,7 +525,8 @@ uint32_t inbox_ioctl_send(dev_handle_t dev_handle, int command, nvme_arg_s * arg
         {
             free(alignPrpPtr);
         }
-        return (P_STATUS_HOST_OS_ERROR);
+       // return (P_STATUS_HOST_OS_ERROR);
+       return 12345;
     }
 
     /* if there is an PRP buffer */

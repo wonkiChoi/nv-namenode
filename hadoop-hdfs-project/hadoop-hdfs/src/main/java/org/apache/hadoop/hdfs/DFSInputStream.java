@@ -81,6 +81,11 @@ import org.apache.hadoop.util.StopWatch;
 import org.apache.htrace.Span;
 import org.apache.htrace.Trace;
 import org.apache.htrace.TraceScope;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+import org.apache.commons.logging.impl.Log4JLogger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.google.common.annotations.VisibleForTesting;
 
@@ -93,6 +98,7 @@ public class DFSInputStream extends FSInputStream
 implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
     HasEnhancedByteBufferAccess, CanUnbuffer {
   @VisibleForTesting
+  //public static final Logger LOG = LoggerFactory.getLogger(DFSInputStream.class);
   public static boolean tcpReadsDisabledForTesting = false;
   private long hedgedReadOpsLoopNumForTesting = 0;
   private final DFSClient dfsClient;
@@ -480,7 +486,7 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
       assert (locatedBlocks != null) : "locatedBlocks is null";
 
       final LocatedBlock blk;
-
+      DFSClient.LOG.info("getBlockAt in");
       //check offset
       if (offset < 0 || offset >= getFileLength()) {
         throw new IOException("offset < 0 || offset >= getFileLength(), offset="
@@ -498,8 +504,10 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
         int targetBlockIdx = locatedBlocks.findBlock(offset);
         if (targetBlockIdx < 0) { // block is not cached
           targetBlockIdx = LocatedBlocks.getInsertIndex(targetBlockIdx);
+          DFSClient.LOG.info("not cache in");
           // fetch more blocks
           final LocatedBlocks newBlocks = dfsClient.getLocatedBlocks(src, offset);
+          DFSClient.LOG.info("newBlock status = " + newBlocks.toString());
           assert (newBlocks != null) : "Could not find target position " + offset;
           locatedBlocks.insertRange(targetBlockIdx, newBlocks.getLocatedBlocks());
         }
@@ -615,6 +623,7 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
     // Will be getting a new BlockReader.
     closeCurrentBlockReader();
 
+    DFSClient.LOG.info("blockSeekTo in");
     //
     // Connect to best DataNode for desired Block, with potential offset
     //

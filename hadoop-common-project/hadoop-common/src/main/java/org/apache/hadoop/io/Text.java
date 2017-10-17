@@ -474,6 +474,14 @@ public class Text extends BinaryComparable
     return decode(bytes);
   }
   
+  public static String readString(ByteBuffer in, int maxLength)
+	      throws IOException {
+	    int length = WritableUtils.readVIntInRange(in, 0, maxLength);
+	    byte [] bytes = new byte[length];
+	    in.get(bytes);
+	    return decode(bytes);
+	  }
+  
   /** Write a UTF8 encoded string to out
    */
   public static int writeString(DataOutput out, String s) throws IOException {
@@ -483,6 +491,14 @@ public class Text extends BinaryComparable
     out.write(bytes.array(), 0, length);
     return length;
   }
+  
+  public static int writeString(ByteBuffer out, String s) throws IOException {
+	    ByteBuffer bytes = encode(s);
+	    int length = bytes.limit();
+	    WritableUtils.writeVInt(out, length);
+	    out.put(bytes);
+	    return length;
+	  }
 
   /** Write a UTF8 encoded string with a maximum size to out
    */
@@ -499,6 +515,20 @@ public class Text extends BinaryComparable
     out.write(bytes.array(), 0, length);
     return length;
   }
+  
+  public static int writeString(ByteBuffer out, String s, int maxLength)
+	      throws IOException {
+	    ByteBuffer bytes = encode(s);
+	    int length = bytes.limit();
+	    if (length > maxLength) {
+	      throw new IOException("string was too long to write!  Expected " +
+	          "less than or equal to " + maxLength + " bytes, but got " +
+	          length + " bytes.");
+	    }
+	    WritableUtils.writeVInt(out, length);
+	    out.put(bytes);
+	    return length;
+	  }
 
   ////// states for validateUTF8
   

@@ -495,12 +495,14 @@ abstract class CommandWithDestination extends FsCommand {
     void rename(PathData src, PathData target) throws IOException {
       // the rename method with an option to delete the target is deprecated
       if (target.exists && !delete(target.path, false)) {
+    	  LOG.info("rename error ------------");
         // too bad we don't know why it failed
         PathIOException e = new PathIOException(target.toString());
         e.setOperation("delete");
         throw e;
       }
       if (!rename(src.path, target.path)) {
+    	  LOG.info("rename error 2222 ------------");
         // too bad we don't know why it failed
         PathIOException e = new PathIOException(src.toString());
         e.setOperation("rename");

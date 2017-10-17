@@ -19,6 +19,9 @@
 package org.apache.hadoop.hdfs.server.namenode;
 
 import com.google.common.base.Preconditions;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import org.apache.commons.io.Charsets;
 import org.apache.hadoop.fs.ContentSummary;
 import org.apache.hadoop.fs.DirectoryListingStartAfterNotFoundException;
@@ -46,6 +49,7 @@ import java.io.IOException;
 import java.util.Arrays;
 
 class FSDirStatAndListingOp {
+	 static final Logger LOG = LoggerFactory.getLogger(FSDirStatAndListingOp.class);
   static DirectoryListing getListingInt(FSDirectory fsd, final String srcArg,
       byte[] startAfter, boolean needLocation) throws IOException {
     FSPermissionChecker pc = fsd.getPermissionChecker();
@@ -276,6 +280,9 @@ class FSDirStatAndListingOp {
     fsd.readLock();
     try {
       final INode i = src.getLastINode();
+      if(i == null)
+        LOG.info("getFileInfo Null?");
+      
       byte policyId = includeStoragePolicy && i != null && !i.isSymlink() ?
           i.getStoragePolicyID() : BlockStoragePolicySuite.ID_UNSPECIFIED;
       return i == null ? null : createFileStatus(
@@ -303,6 +310,7 @@ class FSDirStatAndListingOp {
     fsd.readLock();
     try {
       final INodesInPath iip = fsd.getINodesInPath(srcs, resolveLink);
+      LOG.info("getFileInfo");
       return getFileInfo(fsd, src, iip, isRawPath, includeStoragePolicy);
     } finally {
       fsd.readUnlock();
@@ -382,6 +390,7 @@ class FSDirStatAndListingOp {
      int childrenNum = node.isDirectory() ?
          node.asDirectory().getChildrenNum(snapshot) : 0;
 
+     LOG.info("createFileStatus = " + " " + size + " " + replication + " "+ blocksize);
      INodeAttributes nodeAttrs =
          fsd.getAttributes(fullPath, path, node, snapshot);
      return new HdfsFileStatus(

@@ -17,14 +17,18 @@
  */
 package org.apache.hadoop.hdfs.server.blockmanagement;
 
+import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 
 import com.google.common.annotations.VisibleForTesting;
-
+import org.apache.log4j.Logger;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.fs.StorageType;
 import org.apache.hadoop.hdfs.protocol.DatanodeInfo;
+import org.apache.hadoop.hdfs.server.namenode.FSNamesystem;
 import org.apache.hadoop.hdfs.server.protocol.DatanodeStorage;
 import org.apache.hadoop.hdfs.server.protocol.DatanodeStorage.State;
 import org.apache.hadoop.hdfs.server.protocol.StorageReport;
@@ -33,14 +37,20 @@ import org.apache.hadoop.hdfs.server.protocol.StorageReport;
  * A Datanode has one or more storages. A storage in the Datanode is represented
  * by this class.
  */
-public class DatanodeStorageInfo {
-  public static final DatanodeStorageInfo[] EMPTY_ARRAY = {};
+public class DatanodeStorageInfo implements Serializable {
+	  public static final Log LOG = LogFactory.getLog(DatanodeStorage.class);
+  /**
+	 * 
+	 */
+	private static final long serialVersionUID = 3869297345019465830L;
+public static final DatanodeStorageInfo[] EMPTY_ARRAY = {};
 
   public static DatanodeInfo[] toDatanodeInfos(DatanodeStorageInfo[] storages) {
     return toDatanodeInfos(Arrays.asList(storages));
   }
   static DatanodeInfo[] toDatanodeInfos(List<DatanodeStorageInfo> storages) {
     final DatanodeInfo[] datanodes = new DatanodeInfo[storages.size()];
+	  LOG.info("toDatanodInfois = " + storages.size());
     for(int i = 0; i < storages.size(); i++) {
       datanodes[i] = storages.get(i).getDatanodeDescriptor();
     }

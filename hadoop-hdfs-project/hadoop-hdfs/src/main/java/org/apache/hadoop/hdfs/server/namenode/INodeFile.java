@@ -24,6 +24,7 @@ import static org.apache.hadoop.hdfs.server.namenode.snapshot.Snapshot.NO_SNAPSH
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.io.Serializable;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
@@ -53,15 +54,23 @@ import com.google.common.base.Preconditions;
 /** I-node for closed file. */
 @InterfaceAudience.Private
 public class INodeFile extends INodeWithAdditionalFields
-    implements INodeFileAttributes, BlockCollection {
+    implements INodeFileAttributes, BlockCollection, Serializable {
 
-  /** The same as valueOf(inode, path, false). */
+  /**
+	 * 
+	 */
+	int pos;
+	private static final long serialVersionUID = -8042943511002558943L;
+
+/** The same as valueOf(inode, path, false). */
+	// wk modified public static -> public
   public static INodeFile valueOf(INode inode, String path
       ) throws FileNotFoundException {
     return valueOf(inode, path, false);
   }
 
   /** Cast INode to INodeFile. */
+	// wk modified public static -> public
   public static INodeFile valueOf(INode inode, String path, boolean acceptNull)
       throws FileNotFoundException {
     if (inode == null) {
@@ -81,7 +90,8 @@ public class INodeFile extends INodeWithAdditionalFields
    * Bit format:
    * [4-bit storagePolicyID][12-bit replication][48-bit preferredBlockSize]
    */
-  static enum HeaderFormat {
+  // wk modified static -> public
+  public enum HeaderFormat implements Serializable {
     PREFERRED_BLOCK_SIZE(null, 48, 1),
     REPLICATION(PREFERRED_BLOCK_SIZE.BITS, 12, 1),
     STORAGE_POLICY_ID(REPLICATION.BITS, BlockStoragePolicySuite.ID_BIT_LENGTH,
@@ -92,19 +102,19 @@ public class INodeFile extends INodeWithAdditionalFields
     private HeaderFormat(LongBitFormat previous, int length, long min) {
       BITS = new LongBitFormat(name(), previous, length, min);
     }
-
+	// wk modified static -> x
     static short getReplication(long header) {
       return (short)REPLICATION.BITS.retrieve(header);
     }
-
+	// wk modified static -> x
     static long getPreferredBlockSize(long header) {
       return PREFERRED_BLOCK_SIZE.BITS.retrieve(header);
     }
-
+	// wk modified static -> x
     static byte getStoragePolicyID(long header) {
       return (byte)STORAGE_POLICY_ID.BITS.retrieve(header);
     }
-
+	// wk modified static -> x
     static long toLong(long preferredBlockSize, short replication,
         byte storagePolicyID) {
       long h = 0;
@@ -531,7 +541,9 @@ public class INodeFile extends INodeWithAdditionalFields
         blk.setBlockCollection(null);
       }
     }
-    setBlocks(BlockInfoContiguous.EMPTY_ARRAY);
+    //wk modified
+    BlockInfoContiguous[] EMPTY_ARRAY = {};
+    setBlocks(EMPTY_ARRAY);
     if (getAclFeature() != null) {
       AclStorage.removeAclFeature(getAclFeature());
     }
@@ -859,8 +871,9 @@ public class INodeFile extends INodeWithAdditionalFields
 
   void truncateBlocksTo(int n) {
     final BlockInfoContiguous[] newBlocks;
+    BlockInfoContiguous[] EMPTY_ARRAY = {};
     if (n == 0) {
-      newBlocks = BlockInfoContiguous.EMPTY_ARRAY;
+      newBlocks = EMPTY_ARRAY;
     } else {
       newBlocks = new BlockInfoContiguous[n];
       System.arraycopy(getBlocks(), 0, newBlocks, 0, n);

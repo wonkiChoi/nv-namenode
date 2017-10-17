@@ -100,6 +100,7 @@ public final class HdfsServerConstants {
     BOOTSTRAPSTANDBY("-bootstrapStandby"),
     INITIALIZESHAREDEDITS("-initializeSharedEdits"),
     RECOVER  ("-recover"),
+    RECOVER_NVRAM ("-nvram_recover"),
     FORCE("-force"),
     NONINTERACTIVE("-nonInteractive"),
     RENAMERESERVED("-renameReserved"),

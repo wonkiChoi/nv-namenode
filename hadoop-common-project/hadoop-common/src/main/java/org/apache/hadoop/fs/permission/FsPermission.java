@@ -20,6 +20,8 @@ package org.apache.hadoop.fs.permission;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
+import java.nio.Buffer;
+import java.nio.ByteBuffer;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -30,6 +32,7 @@ import org.apache.hadoop.fs.CommonConfigurationKeys;
 import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.io.WritableFactories;
 import org.apache.hadoop.io.WritableFactory;
+import org.apache.hadoop.io.nativeio.NativeIO;
 
 /**
  * A class for file/directory permissions.
@@ -131,11 +134,29 @@ public class FsPermission implements Writable {
   public void write(DataOutput out) throws IOException {
     out.writeShort(toShort());
   }
+  
+    //out.putShort(toShort());
+  public void write(ByteBuffer out) throws IOException {
+	  int s =  (stickyBit ? 1 << 9 : 0)     |
+		         (useraction.ordinal() << 6)  |
+		         (groupaction.ordinal() << 3) |
+		          otheraction.ordinal();
+
+		out.putInt(s);
+  }
 
   @Override
   public void readFields(DataInput in) throws IOException {
     fromShort(in.readShort());
   }
+  
+  public void readFields(ByteBuffer in) throws IOException {
+	    fromShort((short)in.getInt());
+	  }
+  
+  public void readFields(int new_offset, int pos) throws IOException {
+	    fromShort((short)NativeIO.readIntFromNVRAM(4096, new_offset, pos));
+	  }
 
   /**
    * Create and initialize a {@link FsPermission} from {@link DataInput}.
@@ -146,6 +167,17 @@ public class FsPermission implements Writable {
     return p;
   }
 
+  public static FsPermission read(ByteBuffer in) throws IOException {
+	    FsPermission p = new FsPermission();
+	    p.readFields(in);
+	    return p;
+	  }
+  
+  public static FsPermission read(int new_offset, int pos) throws IOException {
+	    FsPermission p = new FsPermission();
+	    p.readFields(new_offset, pos);
+	    return p;
+	  }
   /**
    * Encode the object to a short.
    */

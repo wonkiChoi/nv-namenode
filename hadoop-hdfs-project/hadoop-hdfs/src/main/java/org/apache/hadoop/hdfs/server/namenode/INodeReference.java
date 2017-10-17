@@ -18,6 +18,7 @@
 package org.apache.hadoop.hdfs.server.namenode;
 
 import java.io.PrintWriter;
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -61,8 +62,13 @@ import org.mortbay.log.Log;
  * Note 2: getParent() always returns the parent in the current state, e.g.
  *         inode(id=1000,name=bar).getParent() returns /xyz but not /abc.
  */
-public abstract class INodeReference extends INode {
+public abstract class INodeReference extends INode implements Serializable {
   /**
+	 * 
+	 */
+	private static final long serialVersionUID = 7039345962331249176L;
+
+/**
    * Try to remove the given reference and then return the reference count.
    * If the given inode is not a reference, return -1;
    */
@@ -373,7 +379,7 @@ public abstract class INodeReference extends INode {
   }
   
   /** An anonymous reference with reference count. */
-  public static class WithCount extends INodeReference {
+  public static class WithCount extends INodeReference implements Serializable {
     
     private final List<WithName> withNameList = new ArrayList<WithName>();
     
@@ -473,7 +479,7 @@ public abstract class INodeReference extends INode {
   }
   
   /** A reference with a fixed name. */
-  public static class WithName extends INodeReference {
+  public static class WithName extends INodeReference implements Serializable {
 
     private final byte[] name;
 
@@ -636,7 +642,7 @@ public abstract class INodeReference extends INode {
     }
   }
   
-  public static class DstReference extends INodeReference {
+  public static class DstReference extends INodeReference implements Serializable {
     /**
      * Record the latest snapshot of the dst subtree before the rename. For
      * later operations on the moved/renamed files/directories, if the latest

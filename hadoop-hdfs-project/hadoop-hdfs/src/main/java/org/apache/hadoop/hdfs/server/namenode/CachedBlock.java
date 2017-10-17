@@ -17,6 +17,7 @@
  */
 package org.apache.hadoop.hdfs.server.namenode;
 
+import java.io.Serializable;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
@@ -35,8 +36,13 @@ import org.apache.hadoop.util.LightWeightGSet.LinkedElement;
  */
 @InterfaceAudience.LimitedPrivate({"HDFS"})
 public final class CachedBlock implements Element, 
-    LightWeightGSet.LinkedElement {
-  private static final Object[] EMPTY_ARRAY = new Object[0];
+    LightWeightGSet.LinkedElement, Serializable {
+  /**
+	 * 
+	 */
+	private static final long serialVersionUID = -5495917712404731011L;
+
+private static final Object[] EMPTY_ARRAY = new Object[0];
 
   /**
    * Block id.

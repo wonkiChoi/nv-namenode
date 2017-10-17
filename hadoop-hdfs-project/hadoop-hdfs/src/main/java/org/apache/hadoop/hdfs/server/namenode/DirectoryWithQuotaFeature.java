@@ -31,16 +31,23 @@ import org.apache.hadoop.hdfs.util.EnumCounters;
 /**
  * Quota feature for {@link INodeDirectory}. 
  */
-@SuppressWarnings("serial")
 public final class DirectoryWithQuotaFeature implements INode.Feature, Serializable {
-  public static final long DEFAULT_NAMESPACE_QUOTA = Long.MAX_VALUE;
+  /**
+	 * 
+	 */
+	private static final long serialVersionUID = -1850628763182167120L;
+public static final long DEFAULT_NAMESPACE_QUOTA = Long.MAX_VALUE;
   public static final long DEFAULT_STORAGE_SPACE_QUOTA = HdfsConstants.QUOTA_RESET;
 
   private QuotaCounts quota;
   private QuotaCounts usage;
 
   public static class Builder implements Serializable {
-    private QuotaCounts quota;
+    /**
+	 * 
+	 */
+	private static final long serialVersionUID = 5807808893960878225L;
+	private QuotaCounts quota;
     private QuotaCounts usage;
 
     public Builder() {

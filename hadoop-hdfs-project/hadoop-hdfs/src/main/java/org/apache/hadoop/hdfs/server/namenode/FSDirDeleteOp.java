@@ -213,7 +213,7 @@ class FSDirDeleteOp {
     targetNode.recordModification(latestSnapshot);
 
     // Remove the node from the namespace
-    long removed = fsd.removeLastINode(iip);
+    long removed = fsd.removeLastINode(iip, fsd.nvram_enabled);
     if (removed == -1) {
       return -1;
     }

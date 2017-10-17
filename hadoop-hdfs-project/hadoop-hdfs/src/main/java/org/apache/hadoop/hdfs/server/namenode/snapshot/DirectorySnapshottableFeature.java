@@ -56,10 +56,14 @@ import com.google.common.collect.Lists;
  * can be taken. This feature extends {@link DirectoryWithSnapshotFeature}, and
  * maintains extra information about all the snapshots taken on this directory.
  */
-@SuppressWarnings("serial")
 @InterfaceAudience.Private
 public class DirectorySnapshottableFeature extends DirectoryWithSnapshotFeature implements Serializable {
-  /** Limit the number of snapshot per snapshottable directory. */
+  /**
+	 * 
+	 */
+	private static final long serialVersionUID = -9179976900381293953L;
+
+/** Limit the number of snapshot per snapshottable directory. */
   static final int SNAPSHOT_LIMIT = 1 << 16;
 
   /**

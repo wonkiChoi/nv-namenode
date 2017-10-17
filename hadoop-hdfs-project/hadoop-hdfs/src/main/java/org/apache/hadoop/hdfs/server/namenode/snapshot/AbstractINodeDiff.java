@@ -19,6 +19,7 @@ package org.apache.hadoop.hdfs.server.namenode.snapshot;
 
 import java.io.DataOutput;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.List;
 
 import org.apache.hadoop.hdfs.server.blockmanagement.BlockStoragePolicySuite;
@@ -141,7 +142,14 @@ abstract class AbstractINodeDiff<N extends INode,
   void writeSnapshot(DataOutput out) throws IOException {
     out.writeInt(snapshotId);
   }
+  
+  void writeSnapshot(ByteBuffer out) throws IOException {
+	    out.putInt(snapshotId);
+	  }
 
   abstract void write(DataOutput out, ReferenceMap referenceMap
       ) throws IOException;
+  
+  abstract void write(ByteBuffer out, ReferenceMap referenceMap
+	      ) throws IOException;
 }

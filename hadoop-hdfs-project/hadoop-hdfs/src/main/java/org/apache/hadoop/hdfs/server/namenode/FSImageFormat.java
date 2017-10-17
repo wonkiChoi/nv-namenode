@@ -27,6 +27,7 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.security.DigestInputStream;
 import java.security.DigestOutputStream;
 import java.security.MessageDigest;
@@ -71,6 +72,7 @@ import org.apache.hadoop.hdfs.util.ReadOnlyList;
 import org.apache.hadoop.io.IOUtils;
 import org.apache.hadoop.io.MD5Hash;
 import org.apache.hadoop.io.Text;
+import org.apache.hadoop.io.nativeio.NativeIO;
 import org.apache.hadoop.util.StringUtils;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -224,10 +226,12 @@ public class FSImageFormat {
               conf, fsn, requireSameLayoutVersion);
           impl = loader;
           loader.load(file);
+          LOG.info("MAGIC HEADER LOAD");
         } else {
           Loader loader = new Loader(conf, fsn);
           impl = loader;
           loader.load(file);
+          LOG.info("ELSE LOAD");
         }
       } finally {
         IOUtils.cleanup(LOG, is);
@@ -319,6 +323,7 @@ public class FSImageFormat {
       DigestInputStream fin = new DigestInputStream(
            new FileInputStream(curFile), digester);
 
+      ByteBuffer nvram_meta = NativeIO.allocateNVRAMBuffer(4096, 0);
       DataInputStream in = new DataInputStream(fin);
       try {
         // read image version: first appeared in version -1

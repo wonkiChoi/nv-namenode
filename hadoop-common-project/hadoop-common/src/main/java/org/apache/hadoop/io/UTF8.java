@@ -22,6 +22,7 @@ import java.io.IOException;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.UTFDataFormatException;
+import java.nio.ByteBuffer;
 
 import org.apache.hadoop.util.StringUtils;
 
@@ -122,6 +123,13 @@ public class UTF8 implements WritableComparable<UTF8> {
       bytes = new byte[length];
     in.readFully(bytes, 0, length);
   }
+  
+  public void readFields(ByteBuffer in) throws IOException {
+	    length = in.getShort();
+	    if (bytes == null || bytes.length < length)
+	      bytes = new byte[length];
+	    in.get(bytes);
+	  }
 
   /** Skips over one UTF8 in the input. */
   public static void skip(DataInput in) throws IOException {
@@ -133,6 +141,11 @@ public class UTF8 implements WritableComparable<UTF8> {
   public void write(DataOutput out) throws IOException {
     out.writeShort(length);
     out.write(bytes, 0, length);
+  }
+  
+  public void write(ByteBuffer out) throws IOException {
+    out.putShort((short) length);
+    out.put(bytes);
   }
 
   /** Compare two UTF8s. */

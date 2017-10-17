@@ -21,6 +21,15 @@ import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.charset.Charset;
+import java.util.Arrays;
+
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+import org.apache.commons.logging.impl.Log4JLogger;
+import org.apache.commons.io.Charsets;
 
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
@@ -32,6 +41,7 @@ import org.apache.hadoop.hdfs.DeprecatedUTF8;
 import org.apache.hadoop.hdfs.protocol.Block;
 import org.apache.hadoop.hdfs.protocol.CacheDirectiveInfo;
 import org.apache.hadoop.hdfs.protocol.CachePoolInfo;
+import org.apache.hadoop.hdfs.protocol.HdfsConstants;
 import org.apache.hadoop.hdfs.protocol.LayoutVersion;
 import org.apache.hadoop.hdfs.server.blockmanagement.BlockInfoContiguous;
 import org.apache.hadoop.hdfs.server.blockmanagement.BlockInfoContiguousUnderConstruction;
@@ -47,8 +57,12 @@ import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.ShortWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.WritableUtils;
+import org.apache.hadoop.io.nativeio.NativeIO;
+import org.apache.hadoop.util.BytesUtil;
 import org.xml.sax.ContentHandler;
 import org.xml.sax.SAXException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.google.common.base.Preconditions;
 
@@ -63,7 +77,7 @@ import com.google.common.base.Preconditions;
 @InterfaceAudience.Private
 @InterfaceStability.Evolving
 public class FSImageSerialization {
-
+	static final Log LOG = LogFactory.getLog(FSImageSerialization.class);
   // Static-only class
   private FSImageSerialization() {}
   
@@ -98,18 +112,85 @@ public class FSImageSerialization {
     p.fromShort(inode.getFsPermissionShort());
     PermissionStatus.write(out, inode.getUserName(), inode.getGroupName(), p);
   }
+  
+  private static int writePermissionStatus(INodeAttributes inode,
+	      int new_offset,int new_pos) throws IOException {
+	    final FsPermission p = TL_DATA.get().FILE_PERM;
+	    p.fromShort(inode.getFsPermissionShort());
+	    int new_posi = 0;
+		  byte [] byte_usr = inode.getUserName().getBytes();
+		  byte [] byte_group = inode.getGroupName().getBytes();
+		  
+		  
+	  	new_posi = NativeIO.putIntToNVRAM(4096, new_offset, byte_usr.length, new_pos);
+	  	new_posi = NativeIO.putBAToNVRAM(4096, new_offset, byte_usr, new_posi);
+	  	new_posi = NativeIO.putIntToNVRAM(4096, new_offset, byte_group.length, new_posi);
+	  	new_posi = NativeIO.putBAToNVRAM(4096, new_offset, byte_group, new_posi);
+		 
+		  int s =  (p.getStickyBit() ? 1 << 9 : 0)     |
+			         (p.getUserAction().ordinal() << 6)  |
+			         (p.getGroupAction().ordinal() << 3) |
+			          p.getOtherAction().ordinal();
+		  
+		  new_posi = NativeIO.putIntToNVRAM(4096, new_offset, s, new_posi);
+	    return new_posi;
+	  }
+  
+  private static void writePermissionStatus(INodeAttributes inode,
+	     ByteBuffer out) throws IOException {
+	    final FsPermission p = TL_DATA.get().FILE_PERM;
+	    p.fromShort(inode.getFsPermissionShort());
+	    PermissionStatus.write(out, inode.getUserName(), inode.getGroupName(), p);
+	  }
 
-  private static void writeBlocks(final Block[] blocks,
-      final DataOutput out) throws IOException {
-    if (blocks == null) {
-      out.writeInt(0);
+  private static int writeBlocks(final Block[] blocks,
+      int new_offset, int new_pos) throws IOException {
+    if (blocks == null | blocks.length == 0) {
+    	int new_new_pos = 0;
+    	new_new_pos = NativeIO.putIntToNVRAM(4096, new_offset, 0, new_pos);
+    	LOG.info("writeBlocks block = 0");
+    	return new_new_pos;
     } else {
-      out.writeInt(blocks.length);
+    	int new_new_pos = 0;
+    	LOG.info("writeBlocks block over 0");
+    	new_new_pos = NativeIO.putIntToNVRAM(4096, new_offset, 1, new_pos);
       for (Block blk : blocks) {
-        blk.write(out);
+    	 LOG.info("writeBlocks blk information = " + blk.getBlockId()+ " " + blk.getNumBytes() + " " + blk.getGenerationStamp());
+    	  new_new_pos = NativeIO.putLongToNVRAM(4096, new_offset, blk.getBlockId(), new_new_pos);
+    	  new_new_pos = NativeIO.putLongToNVRAM(4096, new_offset, blk.getNumBytes(), new_new_pos);	  
+    	  new_new_pos = NativeIO.putLongToNVRAM(4096, new_offset, blk.getGenerationStamp(), new_new_pos);  
       }
+      return new_new_pos;
     }
   }
+  
+  private static void writeBlocks(final Block[] blocks,
+	      final DataOutput out) throws IOException {
+	    if (blocks == null) {
+	      out.writeInt(0);
+	    } else {
+	      out.writeInt(blocks.length);
+	      for (Block blk : blocks) {
+	        blk.write(out);
+	      }
+	    }
+	  }
+  
+  private static void writeBlocks(final Block[] blocks,
+	      final ByteBuffer out) throws IOException {
+	    if (blocks == null | blocks.length == 0 ) {
+	      out.putInt(0);
+	    } else {
+	    	int current = out.position();
+	      out.putInt(blocks.length);
+	      out.position(current);
+	      int length = out.getInt();
+	      LOG.info("block length = " + blocks.length + " in length " + length);
+	      for (Block blk : blocks) {
+	        blk.write(out);
+	      }
+	    }
+	  }
 
   // Helper function that reads in an INodeUnderConstruction
   // from the input stream
@@ -155,6 +236,249 @@ public class FSImageSerialization {
     file.toUnderConstruction(clientName, clientMachine);
     return file;
   }
+  
+  static INodeFile readINodeUnderConstruction(
+	      ByteBuffer in, FSNamesystem fsNamesys, int imgVersion)
+	      throws IOException {
+	    byte[] name = readBytes(in);
+	    long inodeId = NameNodeLayoutVersion.supports(
+	        LayoutVersion.Feature.ADD_INODE_ID, imgVersion) ? in.getLong()
+	        : fsNamesys.dir.allocateNewInodeId();
+	    short blockReplication = in.getShort();
+	    long modificationTime = in.getLong();
+	    long preferredBlockSize = in.getLong();
+	  
+	    int numBlocks = in.getInt();
+	    BlockInfoContiguous[] blocks = new BlockInfoContiguous[numBlocks];
+	    Block blk = new Block();
+	    int i = 0;
+	    for (; i < numBlocks-1; i++) {
+	      blk.readFields(in);
+	      blocks[i] = new BlockInfoContiguous(blk, blockReplication);
+	    }
+	    // last block is UNDER_CONSTRUCTION
+	    if(numBlocks > 0) {
+	      blk.readFields(in);
+	      blocks[i] = new BlockInfoContiguousUnderConstruction(
+	        blk, blockReplication, BlockUCState.UNDER_CONSTRUCTION, null);
+	    }
+	    PermissionStatus perm = PermissionStatus.read(in);
+	    String clientName = readString(in);
+	    String clientMachine = readString(in);
+
+	    // We previously stored locations for the last block, now we
+	    // just record that there are none
+	    int numLocs = in.getInt();
+	    assert numLocs == 0 : "Unexpected block locations";
+
+	    // Images in the pre-protobuf format will not have the lazyPersist flag,
+	    // so it is safe to pass false always.
+	    INodeFile file = new INodeFile(inodeId, name, perm, modificationTime,
+	        modificationTime, blocks, blockReplication, preferredBlockSize, (byte)0);
+	    file.toUnderConstruction(clientName, clientMachine);
+	    return file;
+	  }
+  
+  static INodeFile readINodeFile(
+	      ByteBuffer in)
+	      throws IOException {
+	    LOG.info("bybuf = " + in);
+	    byte[] name = readBytesMod(in);
+	    LOG.info(in);
+	    long inodeId = in.getLong();
+	    LOG.info(in +" READ : inodid =" + inodeId);
+	    short blockReplication = in.getShort();
+	    LOG.info(in + " READ : replication =" + blockReplication);
+	    long modificationTime = in.getLong();
+	    LOG.info(in + " READ : modification =" + modificationTime);
+	    long accessTime = in.getLong();
+	    LOG.info(in +" READ : access =" + accessTime);
+	    long preferredBlockSize = in.getLong();
+	    LOG.info(in + "READ : preferred =" + preferredBlockSize);
+	  
+	    int writeUnderConstruction = in.getInt();
+	    String clientName = null;
+	    String clientMachine = null;
+	    if(writeUnderConstruction == 1) {
+		    clientName = readStringMod(in);
+		    clientMachine = readStringMod(in);	    	
+	    } 
+	    int numBlocks = in.getInt();
+	    LOG.info("READ : writeunder =" + writeUnderConstruction);
+	    LOG.info("READ : numblock =" + numBlocks);
+	    INodeFile file = null;
+	    if(numBlocks == 0) {
+		    PermissionStatus perm = PermissionStatus.read(in);
+		    
+		    file = new INodeFile(inodeId, name, perm, modificationTime,
+		            accessTime, BlockInfoContiguous.EMPTY_ARRAY, blockReplication, preferredBlockSize, (byte)0);
+	    } else {
+	    BlockInfoContiguous[] blocks = new BlockInfoContiguous[numBlocks];
+	    Block blk = new Block();
+//	    if( writeUnderConstruction == 1) {
+//	    int i = 0;
+//	    for (; i < numBlocks-1; i++) {
+//	      blk.readFields(in);
+//	      blocks[i] = new BlockInfoContiguous(blk, blockReplication);
+//	    }
+//	    // last block is UNDER_CONSTRUCTION
+//	    if(numBlocks > 0) {
+//	      blk.readFields(in);
+//	      blocks[i] = new BlockInfoContiguousUnderConstruction(
+//	        blk, blockReplication, BlockUCState.UNDER_CONSTRUCTION, null);
+//	    }
+//	    } else if (writeUnderConstruction == 2) {
+	      int i = 0;
+		    for (; i < numBlocks; i++) {
+		      blk.readFields(in);
+		      blocks[i] = new BlockInfoContiguous(blk, blockReplication);
+		    }
+	  //  }  
+
+	    PermissionStatus perm = PermissionStatus.read(in);  
+	    file = new INodeFile(inodeId, name, perm, modificationTime,
+	        accessTime, blocks, blockReplication, preferredBlockSize, (byte)0);
+	    if(writeUnderConstruction == 1) {
+	    file.toUnderConstruction(clientName, clientMachine);
+	    }
+	    }
+	    return file;
+	  }
+  
+  static INodeFile readINodeFile(
+	      int new_offset, int pos)
+	      throws IOException {
+	    LOG.info("read mod byte???");
+	    int length = NativeIO.readIntFromNVRAM(4096, new_offset, pos);
+	    int new_pos = pos + 4;
+	    byte[] name = NativeIO.readBAFromNVRAM(4096, new_offset, new_pos, length);
+	    LOG.info("name = " + new String(name));
+	    new_pos = new_pos + 100;
+	    
+	    long inodeId = NativeIO.readLongFromNVRAM(4096, new_offset, new_pos);
+	    new_pos = new_pos + 8;
+	    //LOG.info(" READ : inodid =" + inodeId);
+	    short blockReplication = (short)NativeIO.readLongFromNVRAM(4096, new_offset, new_pos);
+	    //LOG.info( " READ : replication =" + blockReplication);
+	    new_pos = new_pos + 8;
+	    long modificationTime = NativeIO.readLongFromNVRAM(4096, new_offset, new_pos);
+	    //LOG.info( " READ : modification =" + modificationTime);
+	    new_pos = new_pos + 8;
+	    long accessTime = NativeIO.readLongFromNVRAM(4096, new_offset, new_pos);
+	    new_pos = new_pos + 8;
+	    //LOG.info(" READ : access =" + accessTime);
+	    long preferredBlockSize = NativeIO.readLongFromNVRAM(4096, new_offset, new_pos);
+	    new_pos = new_pos + 8;
+	    //LOG.info( "READ : preferred =" + preferredBlockSize);
+	  
+	    int writeUnderConstruction = NativeIO.readIntFromNVRAM(4096, new_offset, new_pos);
+	    //LOG.info("ITs important writeunder " + writeUnderConstruction);
+	    new_pos = new_pos + 4;
+	    String clientName = null;
+	    String clientMachine = null;
+	  //  if(writeUnderConstruction == 1) {
+	    	int size = NativeIO.readIntFromNVRAM(4096, new_offset, new_pos);
+	    	new_pos = new_pos + 4;
+	    	byte[] str = NativeIO.readBAFromNVRAM(4096, new_offset, new_pos, size);
+		    new_pos = new_pos + 100;
+		    clientName = new String(str);
+	    	//LOG.info("size = " + size + " string = " + clientName);
+	    	
+	    	int size_second = NativeIO.readIntFromNVRAM(4096, new_offset, new_pos);
+	    	new_pos = new_pos + 4;
+	    	byte[] str_second = NativeIO.readBAFromNVRAM(4096, new_offset, new_pos, size_second);
+		    new_pos = new_pos + 100;
+		    clientMachine = new String(str_second);
+	    	//LOG.info("size_second = " + " string = " + clientMachine);	    	
+	 //   } 
+    	int numBlocks = NativeIO.readIntFromNVRAM(4096, new_offset, new_pos);
+    	new_pos = new_pos + 4;
+	    LOG.info("READ : writeunder =" + writeUnderConstruction);
+	    LOG.info("READ : numblock =" + numBlocks);
+	    INodeFile file = null;
+	    if(numBlocks == 0) {
+	    	//LOG.info("numblock = 0");
+		    PermissionStatus perm = PermissionStatus.read(new_offset, new_pos);
+		    
+		    file = new INodeFile(inodeId, name, perm, modificationTime,
+		            accessTime, BlockInfoContiguous.EMPTY_ARRAY, blockReplication, preferredBlockSize, HdfsConstants.HOT_STORAGE_POLICY_ID);
+		    file.pos = perm.pos;
+		    
+		    if(writeUnderConstruction == 1) {
+			    file.toUnderConstruction(clientName, clientMachine);
+			    }
+		    
+	    } else {
+	    BlockInfoContiguous[] blocks = new BlockInfoContiguous[numBlocks];
+	    Block blk = new Block();
+//	    if( writeUnderConstruction == 1) {
+//	    int i = 0;
+//	    for (; i < numBlocks-1; i++) {
+//	    	
+//	    	blk.setBlockId(NativeIO.readLongFromNVRAM(4096, new_offset, new_pos));
+//	    	new_pos = new_pos + 8;
+//	    	blk.setNumBytes(NativeIO.readLongFromNVRAM(4096, new_offset, new_pos));
+//	    	new_pos = new_pos + 8;
+//	    	blk.setGenerationStamp(NativeIO.readLongFromNVRAM(4096, new_offset, new_pos));
+//	    	new_pos = new_pos + 8;
+//	    	blocks[i] = new BlockInfoContiguous(blk, blockReplication);
+//	    }
+//	    // last block is UNDER_CONSTRUCTION
+//	    if(numBlocks > 0) {
+//	    	blk.setBlockId(NativeIO.readLongFromNVRAM(4096, new_offset, new_pos));
+//	    	new_pos = new_pos + 8;
+//	    	blk.setNumBytes(NativeIO.readLongFromNVRAM(4096, new_offset, new_pos));
+//	    	new_pos = new_pos + 8;
+//	    	blk.setGenerationStamp(NativeIO.readLongFromNVRAM(4096, new_offset, new_pos));
+//	    	new_pos = new_pos + 8;
+//	    	
+//	    	blocks[i] = new BlockInfoContiguousUnderConstruction(
+//	        blk, blockReplication, BlockUCState.UNDER_CONSTRUCTION, null);
+//	    }
+//	    } else if (writeUnderConstruction == 2) {
+	      int i = 0;
+		    for (; i < numBlocks; i++) {
+		    	blk.setBlockId(NativeIO.readLongFromNVRAM(4096, new_offset, new_pos));
+		    	new_pos = new_pos + 8;
+		    	blk.setNumBytes(NativeIO.readLongFromNVRAM(4096, new_offset, new_pos));
+		    	new_pos = new_pos + 8;
+		    	blk.setGenerationStamp(NativeIO.readLongFromNVRAM(4096, new_offset, new_pos));
+		    	new_pos = new_pos + 8;
+		    	blocks[i] = new BlockInfoContiguous(blk, blockReplication);
+		    	
+		    	LOG.info("block read info = " + blocks[i].getBlockId() + " " + blocks[i].getNumBytes() + " " + blocks[i].getGenerationStamp());
+		    }
+	// }  
+	    PermissionStatus perm = PermissionStatus.read(new_offset, new_pos);  
+	    file = new INodeFile(inodeId, name, perm, modificationTime,
+	        accessTime, blocks, blockReplication, preferredBlockSize, HdfsConstants.HOT_STORAGE_POLICY_ID);
+	    file.pos = perm.pos;
+	    if(writeUnderConstruction == 1) {
+	    file.toUnderConstruction(clientName, clientMachine);
+	    }
+	    }
+	    return file;
+	  }
+  
+  static INodeDirectory readINodeDir(
+	      int new_offset, int pos)
+	      throws IOException {
+	  
+	    int length = NativeIO.readIntFromNVRAM(4096, new_offset, pos);
+	    int new_pos = pos + 4;
+	    byte[] name = NativeIO.readBAFromNVRAM(4096, new_offset, new_pos, length);
+	    new_pos = new_pos + 100;
+	    
+	    long inodeId = NativeIO.readLongFromNVRAM(4096, new_offset, new_pos);
+	    new_pos = new_pos + 8;
+	
+	    PermissionStatus perm = PermissionStatus.read(new_offset, new_pos); 
+	    
+	    INodeDirectory dir = new INodeDirectory(inodeId, name, perm, 0L);  
+	    dir.pos = perm.pos;
+	  
+	    return dir;
+	  }
 
   // Helper function that writes an INodeUnderConstruction
   // into the output stream
@@ -176,7 +500,8 @@ public class FSImageSerialization {
 
     out.writeInt(0); //  do not store locations of last block
   }
-
+  
+ 
   /**
    * Serialize a {@link INodeFile} node
    * @param node The node to write
@@ -208,6 +533,146 @@ public class FSImageSerialization {
 
     writePermissionStatus(file, out);
   }
+  // deprecated
+  public static void writeINodeFile(INodeFile file, ByteBuffer out,
+	      boolean writeUnderConstruction) throws IOException {
+	    LOG.info("out = " + out);
+	    writeLocalName(file, out);
+	    LOG.info("out2 = " + out);
+	    long fileid = file.getId();
+	    int current = out.position();
+
+	  }
+  
+  public static int writeINodeFile(INodeFile file, int new_offset,
+	      boolean writeUnderConstruction, int position) throws IOException {
+	    //LOG.info("out = " + out);
+	    int new_pos = 0;
+		  final byte[] name = file.getLocalNameBytes();
+		  LOG.info("namename = " + new String(name));
+		  //String tt = new String(name);
+		  LOG.info("new off = " + new_offset + " position = " + position);
+	    new_pos = NativeIO.putIntToNVRAM(4096, new_offset, name.length, position);
+	    //int name_length = NativeIO.readIntFromNVRAM(4096, new_offset, position);
+	   // LOG.info("new_pos = " + new_pos + " name_length = "  + name_length);
+	  //  int past_pos = new_pos;
+//	    String tcc;
+	//    tcc = NativeIO.putBAToNVRAM(4096, new_offset, name, new_pos);
+	    new_pos = NativeIO.putBAToNVRAM(4096, new_offset, name, new_pos);
+
+//	    byte[] testt = NativeIO.readBAFromNVRAM(4096, new_offset, past_pos, name_length);
+//	    //int length = NativeIO.readBAFromNVRAM(4096, new_offset, past_pos, name.length);
+//	   // LOG.info(" BA length = " + length);
+//	    LOG.info("testtt String = " + new String(testt));
+//	    if(Arrays.equals(name, testt)) {
+//	    	LOG.info("its same");
+//	    } else {
+//	    	LOG.info("its different");
+//	    }
+//	    LOG.info("testname = " + new String(testt) + " length = " + testt.length);
+	    //writeLocalName(file, position);
+	    //LOG.info("out2 = " + out);
+	    long fileid = file.getId();
+	    long testid;
+	    //past_pos = new_pos;
+	    new_pos = NativeIO.putLongToNVRAM(4096, new_offset, fileid, new_pos);
+	   // LOG.info("newnew= " + new_pos);
+	    //testid = NativeIO.readLongFromNVRAM(4096, new_offset, past_pos);
+	   // LOG.info("testid = " + testid);
+	    //int current = out.position();
+	    //out.putLong(fileid);
+	    //out.position(current);
+	    //long after = out.getLong();
+	    //LOG.info(out + " file id = " + fileid +" after " + after );
+	    //current = out.position();
+	    long replication = (long)file.getFileReplication();
+	    new_pos = NativeIO.putLongToNVRAM(4096, new_offset, replication, new_pos);
+	    //LOG.info("newnew2= " + new_pos);
+	    //out.putLong(replication);
+//	    out.position(current);
+//	    short after2 = out.getShort();
+//	    LOG.info(out + " replication = " + replication + " after " + after2);
+	    long modificationTime = file.getModificationTime();
+	    new_pos = NativeIO.putLongToNVRAM(4096, new_offset, modificationTime, new_pos);
+	    //LOG.info("newnew3= " + new_pos);
+	    //current = out.position();
+	    //out.putLong(modificationTime);
+	    //out.position(current);
+	    //after = out.getLong();
+	    //LOG.info(out + " modification = " + modificationTime +" after " + after );
+	    //current = out.position();
+	    long accessTime = file.getAccessTime();
+	    new_pos = NativeIO.putLongToNVRAM(4096, new_offset, accessTime, new_pos);
+	    //LOG.info("newnew4= " + new_pos);
+//	    out.putLong(accessTime);
+//	    out.position(current);
+//	    after = out.getLong();
+//	    LOG.info(out + " accessTime = " + accessTime + " after " + after);
+	    long preferredBlock = file.getPreferredBlockSize();
+	    new_pos = NativeIO.putLongToNVRAM(4096, new_offset, preferredBlock, new_pos);
+	   // LOG.info("newnew5= " + new_pos);
+	    //	    current = out.position();
+//	    out.putLong(preferredBlock);
+//	    out.position(current);
+//	    after = out.getLong();
+//	    LOG.info(out +" preferredBlock = " + preferredBlock + " after " + after);
+	 
+	    if (writeUnderConstruction) {
+		    	 // LOG.info("under");
+		        //out.put((byte) 1);
+		        //out.putInt((int)1);
+		  	    new_pos = NativeIO.putIntToNVRAM(4096, new_offset, 1, new_pos);
+	    } else {
+	    	  //LOG.info("no");
+		  	    new_pos = NativeIO.putIntToNVRAM(4096, new_offset, 2, new_pos);//out.putInt((int)2);
+	      }
+			    //  LOG.info("newnew6= " + new_pos);
+		    	  final FileUnderConstructionFeature uc = file.getFileUnderConstructionFeature();
+		        //current = out.position();
+		        //LOG.info(" current = " + current + " out = " + uc.getClientName());
+		        //writeStringMod(uc.getClientName(), out);
+		    	  
+		    	  byte[] clientName = null;
+		    	  byte[] clientMachine = null;
+		    		if(uc != null) {
+		    			clientName = uc.getClientName().getBytes();
+		    			clientMachine = uc.getClientMachine().getBytes();
+		    		} else {
+		    			clientName = "temporary".getBytes();
+		    			clientMachine = "temporary".getBytes();
+		    		}
+			  	  new_pos = NativeIO.putIntToNVRAM(4096, new_offset, clientName.length, new_pos);
+				  //  LOG.info("newnew7= " + new_pos);
+			  	  new_pos = NativeIO.putBAToNVRAM(4096, new_offset, clientName, new_pos);
+				   // LOG.info("newnew8= " + new_pos);
+			  	  //out.position(current);
+		        //LOG.info(" current2 = " + out);
+			      //String tName = readStringMod(out);    
+		        //LOG.info(out + " underfeature = " + uc.getClientName() + " in = " + tName);
+		        //LOG.info(" client Machine = " + uc.getClientMachine());
+		        //current = out.position();
+			  	  new_pos = NativeIO.putIntToNVRAM(4096, new_offset, clientMachine.length, new_pos);
+				   // LOG.info("newnew9= " + new_pos);
+			  	  new_pos = NativeIO.putBAToNVRAM(4096, new_offset, clientMachine, new_pos);
+				   // LOG.info("newnew10= " + new_pos);
+			  	  //writeStringMod(uc.getClientMachine(), out);
+		        //out.position(current);
+		        //LOG.info("current3 ");
+		        //String cName = readStringMod(out);
+		        //LOG.info("cName = " + cName);
+
+		  
+	    //LOG.info(out);
+      new_pos = writeBlocks(file.getBlocks(), new_offset, new_pos);
+	  //  LOG.info("newnew11= " + new_pos);
+//	    //SnapshotFSImageFormat.saveFileDiffList(file, out);
+//	    LOG.info(out);
+	    new_pos = writePermissionStatus(file, new_offset, new_pos);
+	     //  LOG.info("newnew12= " + new_pos);
+	    
+	    return new_pos;
+//	    LOG.info(out);
+	  }
 
   /** Serialize an {@link INodeFileAttributes}. */
   public static void writeINodeFileAttributes(INodeFileAttributes file,
@@ -221,11 +686,27 @@ public class FSImageSerialization {
     out.writeLong(file.getPreferredBlockSize());
   }
 
+  public static void writeINodeFileAttributes(INodeFileAttributes file,
+	      ByteBuffer out) throws IOException {
+	    writeLocalName(file, out);
+	    writePermissionStatus(file, out);
+	    out.putLong(file.getModificationTime());
+	    out.putLong(file.getAccessTime());
+
+	    out.putShort(file.getFileReplication());
+	    out.putLong(file.getPreferredBlockSize());
+	  }
   private static void writeQuota(QuotaCounts quota, DataOutput out)
       throws IOException {
     out.writeLong(quota.getNameSpace());
     out.writeLong(quota.getStorageSpace());
   }
+  
+  private static void writeQuota(QuotaCounts quota, ByteBuffer out)
+	      throws IOException {
+	    out.putLong(quota.getNameSpace());
+	    out.putLong(quota.getStorageSpace());
+	  }
 
   /**
    * Serialize a {@link INodeDirectory}
@@ -233,26 +714,92 @@ public class FSImageSerialization {
    * @param out The {@link DataOutput} where the fields are written
    */
   public static void writeINodeDirectory(INodeDirectory node, DataOutput out)
+	      throws IOException {
+	    writeLocalName(node, out);
+	    out.writeLong(node.getId());
+	    out.writeShort(0);  // replication
+	    out.writeLong(node.getModificationTime());
+	    out.writeLong(0);   // access time
+	    out.writeLong(0);   // preferred block size
+	    out.writeInt(-1);   // # of blocks
+
+	    writeQuota(node.getQuotaCounts(), out);
+
+	    if (node.isSnapshottable()) {
+	      out.writeBoolean(true);
+	    } else {
+	      out.writeBoolean(false);
+	      out.writeBoolean(node.isWithSnapshot());
+	    }
+
+	    writePermissionStatus(node, out);
+	  }
+  
+  public static int writeINodeDirectory(INodeDirectory node, int new_offset, int position)
       throws IOException {
-    writeLocalName(node, out);
-    out.writeLong(node.getId());
-    out.writeShort(0);  // replication
-    out.writeLong(node.getModificationTime());
-    out.writeLong(0);   // access time
-    out.writeLong(0);   // preferred block size
-    out.writeInt(-1);   // # of blocks
-
-    writeQuota(node.getQuotaCounts(), out);
-
-    if (node.isSnapshottable()) {
-      out.writeBoolean(true);
-    } else {
-      out.writeBoolean(false);
-      out.writeBoolean(node.isWithSnapshot());
-    }
-
-    writePermissionStatus(node, out);
+	  
+	  int new_pos = 0;
+	  final byte[] name = node.getLocalNameBytes();
+	  new_pos = NativeIO.putIntToNVRAM(4096, new_offset, name.length, position);
+	  new_pos = NativeIO.putBAToNVRAM(4096, new_offset, name, new_pos);
+	  
+	  new_pos = NativeIO.putLongToNVRAM(4096, new_offset, node.getId(), new_pos);
+	
+    new_pos = writePermissionStatus(node, new_offset, new_pos);
+    return new_pos;
   }
+  
+  public static void writeINodeDirectory(INodeDirectory node, ByteBuffer out)
+	      throws IOException {
+	    writeLocalName(node, out);
+	    out.putLong(node.getId());
+	    out.putShort((short) 0);  // replication
+	    out.putLong(node.getModificationTime());
+	    out.putLong(0);   // access time
+	    out.putLong(0);   // preferred block size
+	    out.putInt(-1);   // # of blocks
+
+	    writeQuota(node.getQuotaCounts(), out);
+
+	    if (node.isSnapshottable()) {
+	      out.put((byte)1);
+	    } else {
+	      out.put((byte)0);
+	      if(node.isWithSnapshot() == true) {
+	      out.put((byte) 1);
+	      } else {
+	    	  out.put((byte) 0);
+	      }
+	    }
+
+	    writePermissionStatus(node, out);
+	  }
+  
+  public static void writeINodeDirectory(INodeDirectory node, ByteBuffer out, int position)
+	      throws IOException {
+	    writeLocalName(node, out);
+	    out.putLong(node.getId());
+	    out.putShort((short) 0);  // replication
+	    out.putLong(node.getModificationTime());
+	    out.putLong(0);   // access time
+	    out.putLong(0);   // preferred block size
+	    out.putInt(-1);   // # of blocks
+
+	    writeQuota(node.getQuotaCounts(), out);
+
+	    if (node.isSnapshottable()) {
+	      out.put((byte)1);
+	    } else {
+	      out.put((byte)0);
+	      if(node.isWithSnapshot() == true) {
+	      out.put((byte) 1);
+	      } else {
+	    	  out.put((byte) 0);
+	      }
+	    }
+
+	    writePermissionStatus(node, out);
+	  }
 
   /**
    * Serialize a {@link INodeDirectory}
@@ -266,6 +813,14 @@ public class FSImageSerialization {
     out.writeLong(a.getModificationTime());
     writeQuota(a.getQuotaCounts(), out);
   }
+  
+  public static void writeINodeDirectoryAttributes(
+	      INodeDirectoryAttributes a, ByteBuffer out) throws IOException {
+	    writeLocalName(a, out);
+	    writePermissionStatus(a, out);
+	    out.putLong(a.getModificationTime());
+	    writeQuota(a.getQuotaCounts(), out);
+	  }
 
   /**
    * Serialize a {@link INodeSymlink} node
@@ -285,6 +840,20 @@ public class FSImageSerialization {
     Text.writeString(out, node.getSymlinkString());
     writePermissionStatus(node, out);
   }
+  
+  private static void writeINodeSymlink(INodeSymlink node, ByteBuffer out)
+	      throws IOException {
+	    writeLocalName(node, out);
+	    out.putLong(node.getId());
+	    out.putShort((short)0);  // replication
+	    out.putLong(0);   // modification time
+	    out.putLong(0);   // access time
+	    out.putLong(0);   // preferred block size
+	    out.putInt(-2);   // # of blocks
+
+	    Text.writeString(out, node.getSymlinkString());
+	    writePermissionStatus(node, out);
+	  }
 
   /** Serialize a {@link INodeReference} node */
   private static void writeINodeReference(INodeReference ref, DataOutput out,
@@ -314,6 +883,37 @@ public class FSImageSerialization {
     referenceMap.writeINodeReferenceWithCount(withCount, out,
         writeUnderConstruction);
   }
+  
+  private static void writeINodeReference(INodeReference ref, ByteBuffer out,
+	      boolean writeUnderConstruction, ReferenceMap referenceMap
+	      ) throws IOException {
+	    writeLocalName(ref, out);
+	    out.putLong(ref.getId());
+	    out.putShort((short)0);  // replication
+	    out.putLong(0);   // modification time
+	    out.putLong(0);   // access time
+	    out.putLong(0);   // preferred block size
+	    out.putInt(-3);   // # of blocks
+
+	    final boolean isWithName = ref instanceof INodeReference.WithName;
+	    if(isWithName == true) {
+	    out.put((byte)1);
+	    } else {
+	    	out.put((byte)0);
+	    }
+	    if (!isWithName) {
+	      Preconditions.checkState(ref instanceof INodeReference.DstReference);
+	      // dst snapshot id
+	      out.putInt(((INodeReference.DstReference) ref).getDstSnapshotId());
+	    } else {
+	      out.putInt(((INodeReference.WithName) ref).getLastSnapshotId());
+	    }
+
+	    final INodeReference.WithCount withCount
+	        = (INodeReference.WithCount)ref.getReferredINode();
+	    referenceMap.writeINodeReferenceWithCount(withCount, out,
+	        writeUnderConstruction);
+	  }
 
   /**
    * Save one inode's attributes to the image.
@@ -332,6 +932,21 @@ public class FSImageSerialization {
       writeINodeFile(node.asFile(), out, writeUnderConstruction);
     }
   }
+  
+  public static void saveINode2Image(INode node, ByteBuffer out,
+	      boolean writeUnderConstruction, ReferenceMap referenceMap)
+	      throws IOException {
+	    if (node.isReference()) {
+	      writeINodeReference(node.asReference(), out, writeUnderConstruction,
+	          referenceMap);
+	    } else if (node.isDirectory()) {
+	      writeINodeDirectory(node.asDirectory(), out);
+	    } else if (node.isSymlink()) {
+	      writeINodeSymlink(node.asSymlink(), out);
+	    } else if (node.isFile()) {
+	      writeINodeFile(node.asFile(), out, writeUnderConstruction);
+	    }
+	  }
 
   // This should be reverted to package private once the ImageLoader
   // code is moved into this package. This method should not be called
@@ -342,6 +957,29 @@ public class FSImageSerialization {
     ustr.readFields(in);
     return ustr.toStringChecked();
   }
+  
+  @SuppressWarnings("deprecation")
+public static String readString(ByteBuffer in) throws IOException {
+	    DeprecatedUTF8 ustr = TL_DATA.get().U_STR;
+	    ustr.readFields(in);
+	    return ustr.toStringChecked();
+	  }
+  
+  public static String readStringMod(ByteBuffer in) throws IOException {
+	  int size = in.getInt();
+	  LOG.info("read size = " + size);
+	  byte[] str = new byte[size];
+	  in.get(str);
+	  //String ret = null;
+//	  try {
+//	  //ret = (String) BytesUtil.toObject(str);
+		String ret = new String(str);
+	  LOG.info("string = " + ret);
+//	  } catch ( ClassNotFoundException e) {
+//		  LOG.info("class not found");
+//	  }
+	  return ret;
+	  }
 
   static String readString_EmptyAsNull(DataInput in) throws IOException {
     final String s = readString(in);
@@ -354,7 +992,34 @@ public class FSImageSerialization {
     ustr.set(str);
     ustr.write(out);
   }
-
+  
+  @SuppressWarnings("deprecation")
+  public static void writeString(String str, ByteBuffer out) throws IOException {
+    DeprecatedUTF8 ustr = TL_DATA.get().U_STR;
+    ustr.set(str);
+    ustr.write(out);
+  }
+  
+  public static void writeStringMod(String str, ByteBuffer out) throws IOException {
+	  
+//	  try {
+		LOG.info("str = " + str);
+		// str.getBytes();
+	  //byte[] bytestr = BytesUtil.toByteArray(str);
+	  byte[] bytestr = str.getBytes();
+		//bytestr.toString();
+	  LOG.info("out = " + out + " length " + bytestr.length);
+	  int current = out.position();
+	  out.putInt((int)bytestr.length);
+	  out.position(current);
+	  int size = out.getInt();
+	  LOG.info("out = " + out + " length " + bytestr.length + " size = " + size);
+	  out.put(bytestr);
+	  LOG.info("out = " + out );
+//	  } catch (IOException e) {
+//		  LOG.info("IOEXCEPTION");
+//	  }
+	  }
   
   /** read the long value */
   static long readLong(DataInput in) throws IOException {
@@ -429,6 +1094,25 @@ public class FSImageSerialization {
     System.arraycopy(ustr.getBytes(), 0, bytes, 0, len);
     return bytes;
   }
+  
+  @SuppressWarnings("deprecation")
+public static byte[] readBytes(ByteBuffer in) throws IOException {
+	    LOG.info("read byte???");
+	    DeprecatedUTF8 ustr = TL_DATA.get().U_STR;
+	    ustr.readFields(in);
+	    int len = ustr.getLength();
+	    byte[] bytes = new byte[len];
+	    System.arraycopy(ustr.getBytes(), 0, bytes, 0, len);
+	    return bytes;
+	  }
+  
+  public static byte[] readBytesMod(ByteBuffer in) throws IOException {
+	    LOG.info("read mod byte???");
+	    short length = in.getShort();
+	    byte[] bytes = new byte[length];
+	    in.get(bytes);
+	    return bytes;
+	  }
 
   public static byte readByte(DataInput in) throws IOException {
     return in.readByte();
@@ -463,12 +1147,22 @@ public class FSImageSerialization {
     final byte[] name = inode.getLocalNameBytes();
     writeBytes(name, out);
   }
-  
+  private static void writeLocalName(INodeAttributes inode, ByteBuffer out)
+	      throws IOException {
+	   final byte[] name = inode.getLocalNameBytes();
+	   writeBytes(name, out);
+	  }
+   
   public static void writeBytes(byte[] data, DataOutput out)
       throws IOException {
     out.writeShort(data.length);
     out.write(data);
   }
+  public static void writeBytes(byte[] data, ByteBuffer out)
+	      throws IOException {
+	  out.putShort((short)data.length);
+	  out.put(data);
+	  }
 
   /**
    * Write an array of blocks as compactly as possible. This uses

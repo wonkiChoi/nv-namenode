@@ -18,6 +18,7 @@
 package org.apache.hadoop.hdfs.server.namenode;
 
 import java.io.IOException;
+import java.io.Serializable;
 
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.hdfs.server.blockmanagement.BlockInfoContiguous;
@@ -28,8 +29,12 @@ import org.apache.hadoop.hdfs.server.namenode.INode.BlocksMapUpdateInfo;
  * Feature for under-construction file.
  */
 @InterfaceAudience.Private
-public class FileUnderConstructionFeature implements INode.Feature {
-  private String clientName; // lease holder
+public class FileUnderConstructionFeature implements INode.Feature, Serializable {
+  /**
+	 * 
+	 */
+	private static final long serialVersionUID = -845786404318356882L;
+private String clientName; // lease holder
   private final String clientMachine;
 
   public FileUnderConstructionFeature(final String clientName, final String clientMachine) {

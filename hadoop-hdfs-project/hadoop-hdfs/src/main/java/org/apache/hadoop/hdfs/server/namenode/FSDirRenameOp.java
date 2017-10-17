@@ -35,7 +35,9 @@ import org.apache.hadoop.hdfs.server.namenode.snapshot.Snapshot;
 import org.apache.hadoop.hdfs.util.ReadOnlyList;
 import org.apache.hadoop.util.ChunkedArrayList;
 import org.apache.hadoop.util.Time;
-
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+import org.apache.commons.logging.impl.Log4JLogger;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.AbstractMap;
@@ -48,6 +50,7 @@ import static org.apache.hadoop.hdfs.protocol.FSLimitException.MaxDirectoryItems
 import static org.apache.hadoop.hdfs.protocol.FSLimitException.PathComponentTooLongException;
 
 class FSDirRenameOp {
+	  public static final Log LOG = LogFactory.getLog(FSDirRenameOp.class);
   @Deprecated
   static RenameOldResult renameToInt(
       FSDirectory fsd, final String srcArg, final String dstArg,
@@ -171,6 +174,7 @@ class FSDirRenameOp {
     }
 
     if (dstIIP.getLastINode() != null) {
+  	  LOG.info("rename fail55???");
       NameNode.stateChangeLog.warn("DIR* FSDirectory.unprotectedRenameTo: " +
           "failed to rename " + src + " to " + dst + " because destination " +
           "exists");
@@ -178,6 +182,7 @@ class FSDirRenameOp {
     }
     INode dstParent = dstIIP.getINode(-2);
     if (dstParent == null) {
+  	  LOG.info("rename fail66??");
       NameNode.stateChangeLog.warn("DIR* FSDirectory.unprotectedRenameTo: " +
           "failed to rename " + src + " to " + dst + " because destination's " +
           "parent does not exist");
@@ -196,10 +201,12 @@ class FSDirRenameOp {
     try {
       // remove src
       if (!tx.removeSrc4OldRename()) {
+    	  LOG.info("rename fail???");
         return false;
       }
 
       added = tx.addSourceToDestination();
+	    LOG.info("rename fail2???");
       if (added) {
         if (NameNode.stateChangeLog.isDebugEnabled()) {
           NameNode.stateChangeLog.debug("DIR* FSDirectory" +
@@ -620,7 +627,7 @@ class FSDirRenameOp {
     }
 
     long removeSrc() throws IOException {
-      long removedNum = fsd.removeLastINode(srcIIP);
+      long removedNum = fsd.removeLastINode(srcIIP, fsd.nvram_enabled);
       if (removedNum == -1) {
         String error = "Failed to rename " + src + " to " + dst +
             " because the source can not be removed";
@@ -636,7 +643,7 @@ class FSDirRenameOp {
     }
 
     boolean removeSrc4OldRename() {
-      final long removedSrc = fsd.removeLastINode(srcIIP);
+      final long removedSrc = fsd.removeLastINode(srcIIP, fsd.nvram_enabled);
       if (removedSrc == -1) {
         NameNode.stateChangeLog.warn("DIR* FSDirRenameOp.unprotectedRenameTo: "
             + "failed to rename " + src + " to " + dst + " because the source" +
@@ -651,7 +658,7 @@ class FSDirRenameOp {
     }
 
     long removeDst() {
-      long removedNum = fsd.removeLastINode(dstIIP);
+      long removedNum = fsd.removeLastINode(dstIIP, fsd.nvram_enabled);
       if (removedNum != -1) {
         oldDstChild = dstIIP.getLastINode();
         // update the quota count if necessary
@@ -673,7 +680,7 @@ class FSDirRenameOp {
         toDst = new INodeReference.DstReference(dstParent.asDirectory(),
             withCount, dstIIP.getLatestSnapshotId());
       }
-      return fsd.addLastINodeNoQuotaCheck(dstParentIIP, toDst) != null;
+      return fsd.addLastINodeNoQuotaCheck(dstParentIIP, toDst, fsd.nvram_enabled) != null;
     }
 
     void updateMtimeAndLease(long timestamp) throws QuotaExceededException {
@@ -707,7 +714,7 @@ class FSDirRenameOp {
       } else {
         // srcParent is not an INodeDirectoryWithSnapshot, we only need to add
         // the srcChild back
-        fsd.addLastINodeNoQuotaCheck(srcParentIIP, srcChild);
+        fsd.addLastINodeNoQuotaCheck(srcParentIIP, srcChild, fsd.nvram_enabled);
       }
     }
 
@@ -717,7 +724,7 @@ class FSDirRenameOp {
       if (dstParent.isWithSnapshot()) {
         dstParent.undoRename4DstParent(bsps, oldDstChild, dstIIP.getLatestSnapshotId());
       } else {
-        fsd.addLastINodeNoQuotaCheck(dstParentIIP, oldDstChild);
+        fsd.addLastINodeNoQuotaCheck(dstParentIIP, oldDstChild, fsd.nvram_enabled);
       }
       if (oldDstChild != null && oldDstChild.isReference()) {
         final INodeReference removedDstRef = oldDstChild.asReference();

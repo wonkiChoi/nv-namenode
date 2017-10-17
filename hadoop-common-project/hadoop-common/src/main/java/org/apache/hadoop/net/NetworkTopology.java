@@ -178,6 +178,7 @@ public class NetworkTopology {
             return false;
           }
         }
+        LOG.info("numOfLeaves ++");
         children.add(n);
         numOfLeaves++;
         return true;
@@ -198,7 +199,8 @@ public class NetworkTopology {
         }
         // add n to the subtree of the next ancestor node
         if (parentNode.add(n)) {
-          numOfLeaves++;
+          LOG.info("numOfLeaves2 ++");
+        	numOfLeaves++;
           return true;
         } else {
           return false;
@@ -238,6 +240,7 @@ public class NetworkTopology {
         for(int i=0; i<children.size(); i++) {
           if (children.get(i).getName().equals(n.getName())) {
             children.remove(i);
+            LOG.info("numOfLeaves --");
             numOfLeaves--;
             n.setParent(null);
             return true;
@@ -265,6 +268,7 @@ public class NetworkTopology {
           if (parentNode.getNumOfChildren() == 0) {
             children.remove(i);
           }
+          LOG.info("numOfLeaves2 --");
           numOfLeaves--;
         }
         return isRemoved;

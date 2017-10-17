@@ -19,6 +19,8 @@ package org.apache.hadoop.hdfs.server.namenode.snapshot;
 
 import java.io.DataOutput;
 import java.io.IOException;
+import java.io.Serializable;
+import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.HashMap;
@@ -56,9 +58,15 @@ import com.google.common.base.Preconditions;
  * directory. In particular, it contains a directory diff list recording changes
  * made to the directory and its children for each snapshot.
  */
+
 @InterfaceAudience.Private
-public class DirectoryWithSnapshotFeature implements INode.Feature {
+public class DirectoryWithSnapshotFeature implements INode.Feature, Serializable {
   /**
+	 * 
+	 */
+	private static final long serialVersionUID = -1618904601432416648L;
+
+/**
    * The difference between the current state and a previous snapshot
    * of the children list of an INodeDirectory.
    */
@@ -140,6 +148,17 @@ public class DirectoryWithSnapshotFeature implements INode.Feature {
         out.write(name);
       }
     }
+    
+    private void writeCreated(ByteBuffer out) throws IOException {
+        final List<INode> created = getList(ListType.CREATED);
+        out.putInt(created.size());
+        for (INode node : created) {
+          // For INode in created list, we only need to record its local name
+          byte[] name = node.getLocalNameBytes();
+          out.putShort((short)name.length);
+          out.put(name);
+        }
+      }
 
     /** Serialize {@link #deleted} */
     private void writeDeleted(DataOutput out,
@@ -150,6 +169,15 @@ public class DirectoryWithSnapshotFeature implements INode.Feature {
         FSImageSerialization.saveINode2Image(node, out, true, referenceMap);
       }
     }
+    
+    private void writeDeleted(ByteBuffer out,
+            ReferenceMap referenceMap) throws IOException {
+          final List<INode> deleted = getList(ListType.DELETED);
+          out.putInt(deleted.size());
+          for (INode node : deleted) {
+            FSImageSerialization.saveINode2Image(node, out, true, referenceMap);
+          }
+        }
 
     /** Serialize to out */
     private void write(DataOutput out, ReferenceMap referenceMap
@@ -157,6 +185,12 @@ public class DirectoryWithSnapshotFeature implements INode.Feature {
       writeCreated(out);
       writeDeleted(out, referenceMap);
     }
+    
+    private void write(ByteBuffer out, ReferenceMap referenceMap
+            ) throws IOException {
+          writeCreated(out);
+          writeDeleted(out, referenceMap);
+        }
 
     /** Get the list of INodeDirectory contained in the deleted list */
     private void getDirsInDeleted(List<INodeDirectory> dirList) {
@@ -320,6 +354,29 @@ public class DirectoryWithSnapshotFeature implements INode.Feature {
       // Write diff. Node need to write poseriorDiff, since diffs is a list.
       diff.write(out, referenceMap);
     }
+    
+    @Override
+    void write(ByteBuffer out, ReferenceMap referenceMap) throws IOException {
+      writeSnapshot(out);
+      out.putInt(childrenSize);
+
+      // Write snapshotINode
+      if (isSnapshotRoot == true) {
+    	  out.put((byte) 1);
+      } else {
+    	  out.put((byte) 0);
+      }
+      if (!isSnapshotRoot) {
+        if (snapshotINode != null) {
+          out.put((byte) 1);
+          FSImageSerialization.writeINodeDirectoryAttributes(snapshotINode, out);
+        } else {
+          out.put((byte) 0);
+        }
+      }
+      // Write diff. Node need to write poseriorDiff, since diffs is a list.
+      diff.write(out, referenceMap);
+    }
 
     @Override
     QuotaCounts destroyDiffAndCollectBlocks(
@@ -338,7 +395,7 @@ public class DirectoryWithSnapshotFeature implements INode.Feature {
 
   /** A list of directory diffs. */
   public static class DirectoryDiffList
-      extends AbstractINodeDiffList<INodeDirectory, INodeDirectoryAttributes, DirectoryDiff> {
+      extends AbstractINodeDiffList<INodeDirectory, INodeDirectoryAttributes, DirectoryDiff> implements Serializable {
 
     @Override
     DirectoryDiff createDiff(int snapshot, INodeDirectory currentDir) {
@@ -531,10 +588,11 @@ public class DirectoryWithSnapshotFeature implements INode.Feature {
 
   /** Diff list sorted by snapshot IDs, i.e. in chronological order. */
   private final DirectoryDiffList diffs;
-
+  
   public DirectoryWithSnapshotFeature(DirectoryDiffList diffs) {
     this.diffs = diffs != null ? diffs : new DirectoryDiffList();
   }
+
 
   /** @return the last snapshot. */
   public int getLastSnapshotId() {
