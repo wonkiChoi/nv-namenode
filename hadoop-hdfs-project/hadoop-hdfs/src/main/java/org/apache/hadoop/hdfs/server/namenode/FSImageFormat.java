@@ -679,7 +679,7 @@ public class FSImageFormat {
     }
     boolean nvram_enabled = fsDir.getEnabled();
     // NOTE: This does not update space counts for parents
-    if (!parent.addChild(child, nvram_enabled)) {
+    if (!parent.addChild(child, nvram_enabled, fsDir)) {
       return;
     }
     namesystem.dir.cacheName(child);

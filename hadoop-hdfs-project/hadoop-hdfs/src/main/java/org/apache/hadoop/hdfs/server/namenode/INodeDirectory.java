@@ -591,7 +591,7 @@ public class INodeDirectory extends INodeWithAdditionalFields
 				return i < 0 ? null : c.get(i);
 			}
 
-			return sf.getChild(this, name, snapshotId, nvram_enabled);
+			return sf.getChild(this, name, snapshotId, nvram_enabled, location);
 		}
 		return null;
 	}
@@ -1063,7 +1063,7 @@ public class INodeDirectory extends INodeWithAdditionalFields
       if (sf == null) {
         sf = this.addSnapshotFeature(null);
       }
-      return sf.addChild(this, node, setModTime, latestSnapshotId, nvram_enabled);
+      return sf.addChild(this, node, setModTime, latestSnapshotId, nvram_enabled, fsd);
     }
     addChild(node, low, nvram_enabled, fsd);
     if (setModTime) {

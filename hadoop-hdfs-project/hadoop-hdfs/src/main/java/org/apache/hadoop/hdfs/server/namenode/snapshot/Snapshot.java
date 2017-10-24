@@ -177,8 +177,8 @@ static public class Root extends INodeDirectory implements Serializable {
     }
 
     @Override
-    public INode getChild(byte[] name, int snapshotId, boolean nvram_enabled) {
-      return getParent().getChild(name, snapshotId, nvram_enabled);
+    public INode getChild(byte[] name, int snapshotId, boolean nvram_enabled, int location) {
+      return getParent().getChild(name, snapshotId, nvram_enabled, location);
     }
     
     @Override

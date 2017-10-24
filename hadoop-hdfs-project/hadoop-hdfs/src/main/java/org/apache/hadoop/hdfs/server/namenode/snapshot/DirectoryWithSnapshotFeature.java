@@ -35,6 +35,7 @@ import org.apache.hadoop.hdfs.server.namenode.AclStorage;
 import org.apache.hadoop.hdfs.server.namenode.Content;
 import org.apache.hadoop.hdfs.server.namenode.ContentCounts;
 import org.apache.hadoop.hdfs.server.namenode.ContentSummaryComputationContext;
+import org.apache.hadoop.hdfs.server.namenode.FSDirectory;
 import org.apache.hadoop.hdfs.server.namenode.FSImageSerialization;
 import org.apache.hadoop.hdfs.server.namenode.INode;
 import org.apache.hadoop.hdfs.server.namenode.INode.BlocksMapUpdateInfo;
@@ -621,13 +622,13 @@ public class DirectoryWithSnapshotFeature implements INode.Feature, Serializable
  * @throws IOException 
    */
   public boolean addChild(INodeDirectory parent, INode inode,
-      boolean setModTime, int latestSnapshotId, boolean nvram_enabled) throws QuotaExceededException {
+      boolean setModTime, int latestSnapshotId, boolean nvram_enabled, FSDirectory fsd) throws QuotaExceededException {
     ChildrenDiff diff = diffs.checkAndAddLatestSnapshotDiff(latestSnapshotId,
         parent).diff;
     int undoInfo = diff.create(inode);
 
     final boolean added = parent.addChild(inode, setModTime,
-        Snapshot.CURRENT_STATE_ID, nvram_enabled);
+        Snapshot.CURRENT_STATE_ID, nvram_enabled, fsd);
     if (!added) {
       diff.undoCreate(inode, undoInfo);
     }
@@ -690,10 +691,10 @@ public class DirectoryWithSnapshotFeature implements INode.Feature, Serializable
   }
   
   public INode getChild(INodeDirectory currentINode, byte[] name,
-      int snapshotId, boolean nvram_enabled) {
+      int snapshotId, boolean nvram_enabled, int location) {
     final DirectoryDiff diff = diffs.getDiffById(snapshotId);
     return diff != null ? diff.getChild(name, true, currentINode)
-        : currentINode.getChild(name, Snapshot.CURRENT_STATE_ID, nvram_enabled);
+        : currentINode.getChild(name, Snapshot.CURRENT_STATE_ID, nvram_enabled, location);
   }
   
   public INode getChild(INodeDirectory currentINode, byte[] name,

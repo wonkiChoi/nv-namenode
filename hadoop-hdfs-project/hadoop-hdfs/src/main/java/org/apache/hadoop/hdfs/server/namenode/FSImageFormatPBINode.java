@@ -291,7 +291,7 @@ public final class FSImageFormatPBINode {
       }
       boolean nvram_enabled = dir.getEnabled();
       // NOTE: This does not update space counts for parents
-      if (!parent.addChild(child, nvram_enabled)) {
+      if (!parent.addChild(child, nvram_enabled, dir)) {
         return;
       }
       dir.cacheName(child);
