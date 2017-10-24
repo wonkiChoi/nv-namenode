@@ -174,7 +174,6 @@ class FSDirRenameOp {
     }
 
     if (dstIIP.getLastINode() != null) {
-  	  LOG.info("rename fail55???");
       NameNode.stateChangeLog.warn("DIR* FSDirectory.unprotectedRenameTo: " +
           "failed to rename " + src + " to " + dst + " because destination " +
           "exists");
@@ -182,7 +181,6 @@ class FSDirRenameOp {
     }
     INode dstParent = dstIIP.getINode(-2);
     if (dstParent == null) {
-  	  LOG.info("rename fail66??");
       NameNode.stateChangeLog.warn("DIR* FSDirectory.unprotectedRenameTo: " +
           "failed to rename " + src + " to " + dst + " because destination's " +
           "parent does not exist");
@@ -201,12 +199,10 @@ class FSDirRenameOp {
     try {
       // remove src
       if (!tx.removeSrc4OldRename()) {
-    	  LOG.info("rename fail???");
         return false;
       }
 
       added = tx.addSourceToDestination();
-	    LOG.info("rename fail2???");
       if (added) {
         if (NameNode.stateChangeLog.isDebugEnabled()) {
           NameNode.stateChangeLog.debug("DIR* FSDirectory" +

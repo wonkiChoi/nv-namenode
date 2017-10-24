@@ -279,10 +279,7 @@ class FSDirStatAndListingOp {
       throws IOException {
     fsd.readLock();
     try {
-      final INode i = src.getLastINode();
-      if(i == null)
-        LOG.info("getFileInfo Null?");
-      
+      final INode i = src.getLastINode();    
       byte policyId = includeStoragePolicy && i != null && !i.isSymlink() ?
           i.getStoragePolicyID() : BlockStoragePolicySuite.ID_UNSPECIFIED;
       return i == null ? null : createFileStatus(
@@ -310,7 +307,6 @@ class FSDirStatAndListingOp {
     fsd.readLock();
     try {
       final INodesInPath iip = fsd.getINodesInPath(srcs, resolveLink);
-      LOG.info("getFileInfo");
       return getFileInfo(fsd, src, iip, isRawPath, includeStoragePolicy);
     } finally {
       fsd.readUnlock();
@@ -390,7 +386,7 @@ class FSDirStatAndListingOp {
      int childrenNum = node.isDirectory() ?
          node.asDirectory().getChildrenNum(snapshot) : 0;
 
-     LOG.info("createFileStatus = " + " " + size + " " + replication + " "+ blocksize);
+//     LOG.info("createFileStatus = " + " " + size + " " + replication + " "+ blocksize);
      INodeAttributes nodeAttrs =
          fsd.getAttributes(fullPath, path, node, snapshot);
      return new HdfsFileStatus(

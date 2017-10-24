@@ -178,7 +178,6 @@ public class NetworkTopology {
             return false;
           }
         }
-        LOG.info("numOfLeaves ++");
         children.add(n);
         numOfLeaves++;
         return true;
@@ -199,7 +198,6 @@ public class NetworkTopology {
         }
         // add n to the subtree of the next ancestor node
         if (parentNode.add(n)) {
-          LOG.info("numOfLeaves2 ++");
         	numOfLeaves++;
           return true;
         } else {

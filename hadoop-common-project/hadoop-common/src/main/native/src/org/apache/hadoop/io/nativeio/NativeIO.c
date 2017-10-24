@@ -1289,7 +1289,7 @@ Java_org_apache_hadoop_io_nativeio_NativeIO_putLongToNVRAM(JNIEnv * env, jclass 
 	  uint16_t card_total_count;
 	  dev_handle_t dev_handle;
 	  void * dmiBuffer;
-	  FILE * fp;
+//	  FILE * fp;
 
 	  status = PMC_NVRAM_card_list_get(card_list, 1, &card_list_count, &card_total_count);
 	  status = PMC_NVRAM_init(card_list[0].card_uid, &dev_handle);
@@ -1298,15 +1298,14 @@ Java_org_apache_hadoop_io_nativeio_NativeIO_putLongToNVRAM(JNIEnv * env, jclass 
 			  NVRAM_MEM_MAP_FLAGS_DATA_WRITE | NVRAM_MEM_MAP_FLAGS_DATA_READ, (void **) &dmiBuffer, offset);
 	  memcpy(dmiBuffer + index, &data, sizeof(data));
 
-	  fp = fopen("/home/skt_test/native_error_checking.txt","at");
-	  fprintf(fp, "status check in putLongToNVRAM %d\n" , status);
-	  fprintf(fp, "error message : %s\n", strerror(errno));
+//	  fp = fopen("/home/skt_test/native_error_checking.txt","at");
+//	  fprintf(fp, "status check in putLongToNVRAM %d\n" , status);
+//	  fprintf(fp, "error message : %s\n", strerror(errno));
 
-	  fclose(fp);
+//	  fclose(fp);
 	  munmap(dmiBuffer, size);
 	  status = PMC_NVRAM_release(dev_handle);
 	  return (index + sizeof(data));
-	  //return sizeof(data);
 }
 
 JNIEXPORT jint JNICALL
@@ -1318,7 +1317,7 @@ Java_org_apache_hadoop_io_nativeio_NativeIO_putIntToNVRAM(JNIEnv * env, jclass c
 	  uint16_t card_total_count;
 	  dev_handle_t dev_handle;
 	  void * dmiBuffer;
-	  FILE * fp = NULL;
+	  //FILE * fp = NULL;
 
 	  status = PMC_NVRAM_card_list_get(card_list, 1, &card_list_count, &card_total_count);
 	  status = PMC_NVRAM_init(card_list[0].card_uid, &dev_handle);
@@ -1327,11 +1326,11 @@ Java_org_apache_hadoop_io_nativeio_NativeIO_putIntToNVRAM(JNIEnv * env, jclass c
 			  NVRAM_MEM_MAP_FLAGS_DATA_WRITE | NVRAM_MEM_MAP_FLAGS_DATA_READ, (void **) &dmiBuffer, offset);
 	  memcpy(dmiBuffer + index, &data, sizeof(data));
 
-	  fp = fopen("/home/skt_test/native_error_checking.txt","at");
-	  fprintf(fp, "status check in putIntToNVRAM %d\n" , status);
-	  fprintf(fp, "error message : %s\n", strerror(errno));
+//	  fp = fopen("/home/skt_test/native_error_checking.txt","at");
+//	  fprintf(fp, "status check in putIntToNVRAM %d\n" , status);
+//	  fprintf(fp, "error message : %s\n", strerror(errno));
 
-	  fclose(fp);
+//	  fclose(fp);
 	  munmap(dmiBuffer, size);
 	  status = PMC_NVRAM_release(dev_handle);
 	  return (index + sizeof(data));
@@ -1346,51 +1345,33 @@ Java_org_apache_hadoop_io_nativeio_NativeIO_putBAToNVRAM(JNIEnv * env, jclass cl
 	  uint16_t card_total_count;
 	  dev_handle_t dev_handle;
 	  void * dmiBuffer;
-	  FILE * fp;
-	  //jbyte * ret = NULL;
+	  //FILE * fp;
+
 	  char ret[100] = {0, };
 	  char nativeStr[100] = {0, };
 	  int return_index = 100;
-	  //jstring test;
+
 	  int len = (*env)->GetArrayLength(env, data);
 	  jbyte * nativeBytes = (*env)->GetByteArrayElements(env, data, NULL);
-	  //char * nativeStr = (char *)malloc(sizeof(char)*len);
 	  strncpy(nativeStr, (char *) nativeBytes , len);
-	  //char * nativeStr = (*env)->GetStringUTFChars(env, data, NULL);
-
 
 	  status = PMC_NVRAM_card_list_get(card_list, 1, &card_list_count, &card_total_count);
 	  status = PMC_NVRAM_init(card_list[0].card_uid, &dev_handle);
 
 	  status = PMC_NVRAM_mem_map(dev_handle, size,
 			  NVRAM_MEM_MAP_FLAGS_DATA_WRITE | NVRAM_MEM_MAP_FLAGS_DATA_READ, (void **) &dmiBuffer, offset);
-	  //memcpy(dmiBuffer + index, nativeStr, len);
+
 	  memcpy(dmiBuffer + index , nativeStr, sizeof(nativeStr));
 	  //(*env)->ReleaseStringUTFChars(env, data, nativeStr);
 	  //ret = (char *)malloc(sizeof(ret));
-	  memcpy(ret, dmiBuffer + index , sizeof(ret));
+	  //memcpy(ret, dmiBuffer + index , sizeof(ret));
 
+
+//	  fp = fopen("/home/skt_test/native_error_checking.txt","at");
+//	  fprintf(fp, "status check in putBAToNVRAM %d\n" , status);
+//	  fprintf(fp, "error message : %s\n", strerror(errno));
 //
-	  fp = fopen("/home/skt_test/native_error_checking.txt","at");
-	  fprintf(fp, "status check in putBAToNVRAM %d\n" , status);
-	  fprintf(fp, "error message : %s\n", strerror(errno));
-
-	  fclose(fp);
-	  //test = (*env)->NewStringUTF(env, ret);
-	  //test = (*env)->NewStringUTF(env, (char*)dmiBuffer+index);
-	  //	  fp = fopen("/home/skt_test/result.txt","w");
-//	  for(i=0; i<len; i++) {
-//	  fprintf("%x\n", nativeBytes[i]);
-//	  }
-//	  fprintf("%s\n", "cut");
-//	  for(i=0; i<len; i++) {
-//		  fprintf("%x\n", nativeStr[i]);
-//	  }
 //	  fclose(fp);
-	 // free(nativeStr);
-	  //(*env)->ReleaseByteArrayElements(env, data, nativeBytes, JNI_ABORT);
-	  //return index + len;
-	  //return size_na;
 	  munmap(dmiBuffer, size);
 	  status = PMC_NVRAM_release(dev_handle);
 	  return index + return_index;
@@ -1399,14 +1380,6 @@ Java_org_apache_hadoop_io_nativeio_NativeIO_putBAToNVRAM(JNIEnv * env, jclass cl
 JNIEXPORT jint JNICALL
 Java_org_apache_hadoop_io_nativeio_NativeIO_readIntFromNVRAM(JNIEnv * env, jclass clazz, jlong size, jlong offset, jint index)
 {
-//  int i=0;
-//  void * buffer = (*env)->GetDirectBufferAddress(env, target);
-  //void * buffer = malloc(size);
-  //(*env)->SetByteArrayRegion(env, buffer, 0, size, data);
-  //jbyte * temp = (*env)->GetByteArrayElements(env, data, NULL);
-  //i=(*env)->GetDirectBufferCapacity(env, target);
-  //memcpy(buffer, temp, size);
-
 	  P_STATUS status;
 		  NVRAM_card_s card_list[1];
 		  uint16_t card_list_count;
@@ -1414,7 +1387,7 @@ Java_org_apache_hadoop_io_nativeio_NativeIO_readIntFromNVRAM(JNIEnv * env, jclas
 		  dev_handle_t dev_handle;
 		  void * dmiBuffer;
 		  int ret;
-		  FILE * fp;
+		  //FILE * fp;
 
 		  status = PMC_NVRAM_card_list_get(card_list, 1, &card_list_count, &card_total_count);
 		  status = PMC_NVRAM_init(card_list[0].card_uid, &dev_handle);
@@ -1423,12 +1396,12 @@ Java_org_apache_hadoop_io_nativeio_NativeIO_readIntFromNVRAM(JNIEnv * env, jclas
 				  NVRAM_MEM_MAP_FLAGS_DATA_WRITE | NVRAM_MEM_MAP_FLAGS_DATA_READ, (void **) &dmiBuffer, offset);
 		  memcpy(&ret , dmiBuffer + index, sizeof(int));
 
-
-		  fp = fopen("/home/skt_test/native_error_checking.txt","at");
-		  fprintf(fp, "status check in readIntToNVRAM %d\n" , status);
-		  fprintf(fp, "error message : %s\n", strerror(errno));
-
-		  fclose(fp);
+//
+//		  fp = fopen("/home/skt_test/native_error_checking.txt","at");
+//		  fprintf(fp, "status check in readIntToNVRAM %d\n" , status);
+//		  fprintf(fp, "error message : %s\n", strerror(errno));
+//
+//		  fclose(fp);
 		  munmap(dmiBuffer, size);
 		  status = PMC_NVRAM_release(dev_handle);
 		  return (jint) ret;
@@ -1444,7 +1417,7 @@ Java_org_apache_hadoop_io_nativeio_NativeIO_readLongFromNVRAM(JNIEnv * env, jcla
 		  dev_handle_t dev_handle;
 		  void * dmiBuffer;
 		  long ret;
-		  FILE *fp;
+		  //FILE *fp;
 
 		  status = PMC_NVRAM_card_list_get(card_list, 1, &card_list_count, &card_total_count);
 		  status = PMC_NVRAM_init(card_list[0].card_uid, &dev_handle);
@@ -1454,11 +1427,11 @@ Java_org_apache_hadoop_io_nativeio_NativeIO_readLongFromNVRAM(JNIEnv * env, jcla
 		  memcpy(&ret , dmiBuffer + index, sizeof(long));
 
 //
-		  fp = fopen("/home/skt_test/native_error_checking.txt","at");
-		  fprintf(fp, "status check in readLongToNVRAM %d\n" , status);
-		  fprintf(fp, "error message : %s\n", strerror(errno));
-
-		  fclose(fp);
+//		  fp = fopen("/home/skt_test/native_error_checking.txt","at");
+//		  fprintf(fp, "status check in readLongToNVRAM %d\n" , status);
+//		  fprintf(fp, "error message : %s\n", strerror(errno));
+//
+//		  fclose(fp);
 		  munmap(dmiBuffer, size);
 		  status = PMC_NVRAM_release(dev_handle);
 		  return (jlong) ret;
@@ -1476,7 +1449,7 @@ Java_org_apache_hadoop_io_nativeio_NativeIO_readBAFromNVRAM(JNIEnv * env, jclass
 		  //jbyte * ret = NULL;
 		  jbyteArray byteAR;
 		  int length;
-		  FILE * fp;
+		  //FILE * fp;
 		  //int len = 18;
 		  //jstring teststring;
 		  char ret[100] = {0, };
@@ -1486,27 +1459,17 @@ Java_org_apache_hadoop_io_nativeio_NativeIO_readBAFromNVRAM(JNIEnv * env, jclass
 
 		  status = PMC_NVRAM_mem_map(dev_handle, size,
 				  NVRAM_MEM_MAP_FLAGS_DATA_WRITE | NVRAM_MEM_MAP_FLAGS_DATA_READ, (void **) &dmiBuffer, offset);
-//		  ret = (char *)malloc( sizeof(char)*sizeArray);
-		  //ret = (jbyte *)malloc(sizeArray+6);
+
 		  memcpy(ret , dmiBuffer + index, sizeof(ret));
-		  //memcpy(ret , (char *)(dmiBuffer + index), (int)18);
 		  length = (int) strlen(ret);
 		  byteAR = (*env)->NewByteArray(env, length);
-		  //string = (*env)->NewStringUTF(env, ret);
 		  (*env)->SetByteArrayRegion(env, byteAR, 0, length, (jbyte *)ret);
-		  //return byteAR;
-		  //return sizeArray;
-		  //teststring= (*env)->NewStringUTF(env, ret);
 
-
-		  fp = fopen("/home/skt_test/native_error_checking.txt","at");
-		  fprintf(fp, "status check in readBAToNVRAM %d\n" , status);
-		  fprintf(fp, "error message : %s\n", strerror(errno));
-
-		  fclose(fp);
-		  //free(ret);
-		  //return teststring;
-		  //return length;
+//		  fp = fopen("/home/skt_test/native_error_checking.txt","at");
+//		  fprintf(fp, "status check in readBAToNVRAM %d\n" , status);
+//		  fprintf(fp, "error message : %s\n", strerror(errno));
+//
+//		  fclose(fp);
 		  munmap(dmiBuffer, size);
 		  status = PMC_NVRAM_release(dev_handle);
 		  return byteAR;

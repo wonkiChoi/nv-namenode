@@ -431,6 +431,7 @@ public class FSEditLog implements LogsPurgeable {
    * store yet.
    */
   void logEdit(final FSEditLogOp op) {
+	  
     synchronized (this) {
       assert isOpenForWrite() :
         "bad state: " + state;
@@ -441,8 +442,10 @@ public class FSEditLog implements LogsPurgeable {
       long start = beginTransaction();
       op.setTransactionId(txid);
 
-      try {
-        editLogStream.write(op);
+			try {
+				if (this.nvram_enabled == false) {
+					editLogStream.write(op);
+				}
       } catch (IOException ex) {
         // All journals failed, it is handled in logSync.
       } finally {
@@ -595,7 +598,8 @@ public class FSEditLog implements LogsPurgeable {
    */
   public void logSync() {
     long syncStart = 0;
-    if(this.nvram_enabled == false) {
+//    LOG.info("nvram_enabled in logSync = " + this.nvram_enabled);
+//    if(this.nvram_enabled == false) {
     // Fetch the transactionId of this thread. 
     long mytxid = myTransactionId.get().txid;
     
@@ -694,7 +698,7 @@ public class FSEditLog implements LogsPurgeable {
         this.notifyAll();
      }
     }
-    }
+  //  }
   }
 
   //
@@ -1592,6 +1596,9 @@ public class FSEditLog implements LogsPurgeable {
     long txId = fromTxId;
     while (true) {
       if (txId > toAtLeastTxId) return;
+			if (txId == toAtLeastTxId && this.nvram_enabled == true) {
+				return;
+			}
       if (!iter.hasNext()) break;
       EditLogInputStream elis = iter.next();
       if (elis.getFirstTxId() > txId) break;

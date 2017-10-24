@@ -80,7 +80,6 @@ public class PermissionStatus implements Writable {
 
   /** Return group name */
   public String getGroupName() {
-	  LOG.info("getGroupName called");
 	  return groupname;
 	  }
 
@@ -104,25 +103,15 @@ public class PermissionStatus implements Writable {
   }
   
   public void readFields(int new_offset, int pos) throws IOException {
-	  LOG.info("aa");
 	  int size = NativeIO.readIntFromNVRAM(4096, new_offset, pos);
 	  int new_pos = pos + 4;
-	  //byte [] user = new byte[size];
-	  LOG.info("bb");
 	  username = new String(NativeIO.readBAFromNVRAM(4096, new_offset, new_pos, size));
-	  LOG.info("username in readField = " + username);
 	  new_pos = new_pos + 100;
-	  LOG.info("cc");
 	  size = NativeIO.readIntFromNVRAM(4096, new_offset, new_pos);
 	  new_pos = new_pos + 4;
-	  //byte [] group = new byte[size];
-	  LOG.info("dd");
-	  LOG.info("groupname size = " + size + " and new_pos " + new_pos);
 	  groupname = new String(NativeIO.readBAFromNVRAM(4096, new_offset, new_pos, size));
-	  LOG.info("groupname in readField = " + groupname);
 	  new_pos = new_pos + 100;
 	  permission = FsPermission.read(new_offset, new_pos);
-	  LOG.info("kk");
 	  new_pos = new_pos + 4;
 	  this.pos = new_pos;
 	  }

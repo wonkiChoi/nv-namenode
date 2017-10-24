@@ -79,7 +79,8 @@ static enum PermissionStatusFormat {
       return permission;
     }
   }
-
+/** nvram location **/
+  //private int nvram_location;
   /** The inode id. */
   final private long id;
   /**
@@ -141,6 +142,12 @@ static enum PermissionStatusFormat {
     return next;
   }
 
+//  public final int getNV() {
+//	  return this.nvram_location;
+//  }
+//  public final void setNV(int nvram_location) {
+//	  this.nvram_location = nvram_location;
+//  }
   /** Get inode id */
   @Override
   public final long getId() {

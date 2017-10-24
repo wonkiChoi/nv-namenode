@@ -671,17 +671,19 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
    */
   static FSNamesystem loadFromDisk(Configuration conf) throws IOException {
 
+	  LOG.info("loadFromDisk called");
     checkConfiguration(conf);
-    FSImage fsImage = new FSImage(conf,
-        FSNamesystem.getNamespaceDirs(conf),
-        FSNamesystem.getNamespaceEditsDirs(conf));
     boolean nvram_enabled = conf.getBoolean(DFSConfigKeys.DFS_NAME_NVRAM, DFSConfigKeys.DFS_NAME_NVRAM_DEFAULT);
+    FSImage fsImage;
     FSNamesystem namesystem;
-    if(nvram_enabled == true) {
-     namesystem = new FSNamesystem(conf, fsImage, false, true);
-    } else {
-     namesystem = new FSNamesystem(conf, fsImage, false);
-       }
+		if (nvram_enabled == true) {
+			fsImage = new FSImage(conf, FSNamesystem.getNamespaceDirs(conf), FSNamesystem.getNamespaceEditsDirs(conf),
+					nvram_enabled);
+			namesystem = new FSNamesystem(conf, fsImage, false, true);
+		} else {
+			fsImage = new FSImage(conf, FSNamesystem.getNamespaceDirs(conf), FSNamesystem.getNamespaceEditsDirs(conf));
+			namesystem = new FSNamesystem(conf, fsImage, false);
+		}
     StartupOption startOpt = NameNode.getStartupOption(conf);
     if (startOpt == StartupOption.RECOVER) {
       namesystem.setSafeMode(SafeModeAction.SAFEMODE_ENTER);
@@ -703,35 +705,6 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     }
     return namesystem;
   }
-  
-  static FSNamesystem loadFromDisk(Configuration conf, boolean nvram_enabled) throws IOException {
-
-	    checkConfiguration(conf);
-	    FSImage fsImage = new FSImage(conf,
-	        FSNamesystem.getNamespaceDirs(conf),
-	        FSNamesystem.getNamespaceEditsDirs(conf));
-	    FSNamesystem namesystem = new FSNamesystem(conf, fsImage, false, nvram_enabled, true);
-	    StartupOption startOpt = NameNode.getStartupOption(conf);
-	    if (startOpt == StartupOption.RECOVER) {
-	      namesystem.setSafeMode(SafeModeAction.SAFEMODE_ENTER);
-	    }
-
-	    long loadStart = monotonicNow();
-	    try {
-	      namesystem.loadFSImage(startOpt);
-	    } catch (IOException ioe) {
-	      LOG.warn("Encountered exception loading fsimage", ioe);
-	      fsImage.close();
-	      throw ioe;
-	    }
-	    long timeTakenToLoadFSImage = monotonicNow() - loadStart;
-	    LOG.info("Finished loading FSImage in " + timeTakenToLoadFSImage + " msecs");
-	    NameNodeMetrics nnMetrics = NameNode.getNameNodeMetrics();
-	    if (nnMetrics != null) {
-	      nnMetrics.setFsImageLoadTime((int) timeTakenToLoadFSImage);
-	    }
-	    return namesystem;
-	  }
   
   FSNamesystem(Configuration conf, FSImage fsImage) throws IOException {
     this(conf, fsImage, false);
@@ -3489,7 +3462,6 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
         }
       }
 
-      LOG.info("storeAllocatedBlock called");
       // commit the last block and complete it if it has minimum replicas
       commitOrCompleteLastBlock(pendingFile, fileState.iip,
                                 ExtendedBlock.getLocalBlock(previous));
@@ -3499,8 +3471,6 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       INodesInPath inodesInPath = INodesInPath.fromINode(pendingFile);
       saveAllocatedBlock(src, inodesInPath, newBlock, targets);
       persistNewBlock(src, pendingFile); 
-      LOG.info("this is addBlock pending file !");
-      LOG.info("block num = " + pendingFile.getBlocks().length);
       
       offset = pendingFile.computeFileSize();
     } finally {
@@ -3894,7 +3864,6 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     if (!checkFileProgress(src, pendingFile, false)) {
       return false;
     }
-    LOG.info("complete file");
      // commit the last block and complete it if it has minimum replicas
     commitOrCompleteLastBlock(pendingFile, iip, last);
 
@@ -4523,11 +4492,9 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
   private void commitOrCompleteLastBlock(final INodeFile fileINode,
       final INodesInPath iip, final Block commitBlock) throws IOException {
     assert hasWriteLock();
-    LOG.info("commitOrCompleteLastBlock");
     Preconditions.checkArgument(fileINode.isUnderConstruction()); 
     if (!blockManager.commitOrCompleteLastBlock(fileINode, commitBlock, this.dir.nvram_enabled)) {
     //	if(!blockManager.commitOrCompleteLastBlock(fileINode, commitBlock)) {
-      LOG.info("yogido?");
       return;
     } 
 
@@ -4560,7 +4527,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     // since we just remove the uc feature from pendingFile
     pendingFile.toCompleteFile(now());
     if(this.dir.nvram_enabled) {
-    this.dir.rootDir.commitChild(pendingFile, blockManager.getBlockCollection(pendingFile.getLastBlock()), this.dir.nvram_enabled);
+    this.dir.rootDir.commitChild(pendingFile, blockManager.getBlockCollection(pendingFile.getLastBlock()), this.dir.nvram_enabled, dir);
     }
 
     waitForLoadingFSImage();
@@ -4797,7 +4764,6 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       BlockInfoContiguous storedBlock) throws IOException {
     final INodesInPath iip = INodesInPath.fromINode(pendingFile);
 
-    LOG.info("closeFile called");
     // commit the last block and complete it if it has minimum replicas
     commitOrCompleteLastBlock(pendingFile, iip, storedBlock);
 
@@ -6558,18 +6524,15 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     // deletion
     INode tmpChild = file;
     INodeDirectory tmpParent = file.getParent();
-    LOG.info("is Delete");
-    LOG.info("tmpParent = " + tmpParent.getFullPathName() + " tmpChild = " + tmpChild.getFullPathName());
     while (true) {
       if (tmpParent == null) {
         return true;
       }
       boolean nvram_enabled = dir.getEnabled(); 
+      int location = dir.NVramMap.get(tmpChild.getLocalName());
+      LOG.info("location in isFileDelete : name = " + tmpChild.getLocalName() + " location = " + location);
       INode childINode = tmpParent.getChild(tmpChild.getLocalNameBytes(),
-          Snapshot.CURRENT_STATE_ID, nvram_enabled);
-      if(childINode != null) {
-    	  LOG.info("Child Inode = " + childINode.getFullPathName());
-    	     }
+          Snapshot.CURRENT_STATE_ID, nvram_enabled, location);
       if (childINode == null || !childINode.equals(tmpChild)) {
         // a newly created INode with the same name as an already deleted one
         // would be a different INode than the deleted one

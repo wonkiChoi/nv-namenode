@@ -323,7 +323,6 @@ public class FSImageFormat {
       DigestInputStream fin = new DigestInputStream(
            new FileInputStream(curFile), digester);
 
-      ByteBuffer nvram_meta = NativeIO.allocateNVRAMBuffer(4096, 0);
       DataInputStream in = new DataInputStream(fin);
       try {
         // read image version: first appeared in version -1

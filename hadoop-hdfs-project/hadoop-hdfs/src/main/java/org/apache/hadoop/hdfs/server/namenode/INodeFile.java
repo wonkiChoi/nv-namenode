@@ -60,6 +60,7 @@ public class INodeFile extends INodeWithAdditionalFields
 	 * 
 	 */
 	int pos;
+	int nvram_location;
 	private static final long serialVersionUID = -8042943511002558943L;
 
 /** The same as valueOf(inode, path, false). */

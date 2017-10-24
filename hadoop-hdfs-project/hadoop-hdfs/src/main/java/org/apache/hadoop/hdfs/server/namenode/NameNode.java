@@ -1490,12 +1490,13 @@ public class NameNode implements NameNodeStatusMXBean {
 	        return;
 	      }
 	    }
+	    LOG.info("doRecovery called");
 	    MetaRecoveryContext.LOG.info("starting recovery...");
 	    UserGroupInformation.setConfiguration(conf);
 	    NameNode.initMetrics(conf, startOpt.toNodeRole());
 	    FSNamesystem fsn = null;
 	    try {
-	      fsn = FSNamesystem.loadFromDisk(conf, true);
+	      fsn = FSNamesystem.loadFromDisk(conf);
 	      fsn.getFSImage().saveNamespace(fsn);
 	      MetaRecoveryContext.LOG.info("RECOVERY COMPLETE");
 	    } catch (IOException e) {

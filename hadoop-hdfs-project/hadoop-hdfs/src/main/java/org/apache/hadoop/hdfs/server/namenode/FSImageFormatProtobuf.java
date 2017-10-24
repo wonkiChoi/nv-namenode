@@ -477,39 +477,39 @@ public final class FSImageFormatProtobuf {
 		  final FSNamesystem fsn = context.getSourceNamesystem();
 	    BlockIdManager blockIdManager = fsn.getBlockIdManager();
 
-	    if(fsn.dir.nvram_enabled == true) {
-	    	
-	    	LOG.info("saveInternal");
-			  byte [] fileversion = BytesUtil.toByteArray(FSImageUtil.FILE_VERSION);
-			  byte [] layoutversion = BytesUtil.toByteArray(NameNodeLayoutVersion.CURRENT_LAYOUT_VERSION);
-			  byte [] generationstampv1 = BytesUtil.toByteArray(blockIdManager.getGenerationStampV1());
-			  byte [] generationstampv1limit = BytesUtil.toByteArray(blockIdManager.getGenerationStampV1Limit());
-			  byte [] generationstampv2 = BytesUtil.toByteArray(blockIdManager.getGenerationStampV2());
-			  byte [] lastallocatedblockid = BytesUtil.toByteArray(blockIdManager.getLastAllocatedBlockId());
-			  byte [] txid = BytesUtil.toByteArray(context.getTxId());
-			  byte [] namespaceid = BytesUtil.toByteArray(fsn.unprotectedGetNamespaceInfo().getNamespaceID());
-
-			  if (fsn.isRollingUpgrade()) {
-		    byte [] rollingtime = BytesUtil.toByteArray(fsn.getRollingUpgradeInfo().getStartTime());
-		    fsn.nvram_meta.put(rollingtime);
-			  }
-			  /*long length = fileversion.length + layoutversion.length + generationstampv1.length + generationstampv1limit.length
-					  + generationstampv2.length + lastallocatedblockid.length + txid.length
-					  + namespaceid.length + rollingtime.length;
-			  */
-			  //fsn.meta_size = length;
-		    fsn.nvram_meta = NativeIO.allocateNVRAMBuffer(4096, 0);
-		    fsn.nvram_meta.put(fileversion);
-		    fsn.nvram_meta.put(layoutversion);
-		    fsn.nvram_meta.put(generationstampv1);
-		    fsn.nvram_meta.put(generationstampv1limit);
-		    fsn.nvram_meta.put(generationstampv2);
-		    fsn.nvram_meta.put(lastallocatedblockid);
-		    fsn.nvram_meta.put(txid);
-		    fsn.nvram_meta.put(namespaceid);
-		    fsn.nvram_meta.clear();  
-	    
-	    }
+//	    if(fsn.dir.nvram_enabled == true) {
+//	    	
+//	    	LOG.info("saveInternal");
+//			  byte [] fileversion = BytesUtil.toByteArray(FSImageUtil.FILE_VERSION);
+//			  byte [] layoutversion = BytesUtil.toByteArray(NameNodeLayoutVersion.CURRENT_LAYOUT_VERSION);
+//			  byte [] generationstampv1 = BytesUtil.toByteArray(blockIdManager.getGenerationStampV1());
+//			  byte [] generationstampv1limit = BytesUtil.toByteArray(blockIdManager.getGenerationStampV1Limit());
+//			  byte [] generationstampv2 = BytesUtil.toByteArray(blockIdManager.getGenerationStampV2());
+//			  byte [] lastallocatedblockid = BytesUtil.toByteArray(blockIdManager.getLastAllocatedBlockId());
+//			  byte [] txid = BytesUtil.toByteArray(context.getTxId());
+//			  byte [] namespaceid = BytesUtil.toByteArray(fsn.unprotectedGetNamespaceInfo().getNamespaceID());
+//
+//			  if (fsn.isRollingUpgrade()) {
+//		    byte [] rollingtime = BytesUtil.toByteArray(fsn.getRollingUpgradeInfo().getStartTime());
+//		    fsn.nvram_meta.put(rollingtime);
+//			  }
+//			  /*long length = fileversion.length + layoutversion.length + generationstampv1.length + generationstampv1limit.length
+//					  + generationstampv2.length + lastallocatedblockid.length + txid.length
+//					  + namespaceid.length + rollingtime.length;
+//			  */
+//			  //fsn.meta_size = length;
+//		    fsn.nvram_meta = NativeIO.allocateNVRAMBuffer(4096, 0);
+//		    fsn.nvram_meta.put(fileversion);
+//		    fsn.nvram_meta.put(layoutversion);
+//		    fsn.nvram_meta.put(generationstampv1);
+//		    fsn.nvram_meta.put(generationstampv1limit);
+//		    fsn.nvram_meta.put(generationstampv2);
+//		    fsn.nvram_meta.put(lastallocatedblockid);
+//		    fsn.nvram_meta.put(txid);
+//		    fsn.nvram_meta.put(namespaceid);
+//		    fsn.nvram_meta.clear();  
+//	    
+//	    }
       // Check for cancellation right after serializing the name system section.
       // Some unit tests, such as TestSaveNamespace#testCancelSaveNameSpace
       // depends on this behavior.

@@ -50,7 +50,6 @@ public static final DatanodeStorageInfo[] EMPTY_ARRAY = {};
   }
   static DatanodeInfo[] toDatanodeInfos(List<DatanodeStorageInfo> storages) {
     final DatanodeInfo[] datanodes = new DatanodeInfo[storages.size()];
-	  LOG.info("toDatanodInfois = " + storages.size());
     for(int i = 0; i < storages.size(); i++) {
       datanodes[i] = storages.get(i).getDatanodeDescriptor();
     }

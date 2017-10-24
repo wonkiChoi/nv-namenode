@@ -231,10 +231,9 @@ public class INodesInPath {
   }
 
   static INodesInPath resolve(final INodeDirectory startingDir,
-	      final byte[][] components, final boolean resolveLink, boolean nvram_enabled)
+	      final byte[][] components, final boolean resolveLink, boolean nvram_enabled, FSDirectory fsd)
 	      throws UnresolvedLinkException {
 	    Preconditions.checkArgument(startingDir.compareTo(components[0]) == 0);
-  	  LOG.info("resolve = true?" + resolveLink);
 	    INode curNode = startingDir;
 	        
 	    int count = 0;
@@ -250,7 +249,6 @@ public class INodesInPath {
 	      final boolean isDir = curNode.isDirectory();
 	      final INodeDirectory dir = isDir? curNode.asDirectory(): null;
 	      if (!isRef && isDir && dir.isWithSnapshot()) {
-	    	  LOG.info("resolve1 = true here?");
 	        //if the path is a non-snapshot path, update the latest snapshot.
 	        if (!isSnapshot && shouldUpdateLatestId(
 	            dir.getDirectoryWithSnapshotFeature().getLastSnapshotId(),
@@ -258,7 +256,6 @@ public class INodesInPath {
 	          snapshotId = dir.getDirectoryWithSnapshotFeature().getLastSnapshotId();
 	        }
 	      } else if (isRef && isDir && !lastComp) {
-	    	  LOG.info("resolve2 = true here?");
 	        // If the curNode is a reference node, need to check its dstSnapshot:
 	        // 1. if the existing snapshot is no later than the dstSnapshot (which
 	        // is the latest snapshot in dst before the rename), the changes 
@@ -270,7 +267,6 @@ public class INodesInPath {
 	        // a modification operation, we do a similar check in corresponding 
 	        // recordModification method.
 	        if (!isSnapshot) {
-		    	  LOG.info("resolve3 = true here?");
 	          int dstSnapshotId = curNode.asReference().getDstSnapshotId();
 	          if (snapshotId == CURRENT_STATE_ID || // no snapshot in dst tree of rename
 	              (dstSnapshotId != CURRENT_STATE_ID &&
@@ -286,7 +282,6 @@ public class INodesInPath {
 	        }
 	      }
 	      if (curNode.isSymlink() && (!lastComp || resolveLink)) {
-	    	  LOG.info("resolve4 = true here?");
 	        final String path = constructPath(components, 0, components.length);
 	        final String preceding = constructPath(components, 0, count);
 	        final String remainder =
@@ -324,10 +319,11 @@ public class INodesInPath {
 	          snapshotId = s.getId();
 	        }
 	      } else {
-	    	  LOG.info("resolve");
 	        // normal case, and also for resolving file/dir under snapshot root
-	        curNode = dir.getChild(childName,
-	            isSnapshot ? snapshotId : CURRENT_STATE_ID, nvram_enabled);
+	        int location = fsd.NVramMap.get(new String(childName));
+	        LOG.info("location in resolve = " + location);
+	    	  curNode = dir.getChild(childName,
+	            isSnapshot ? snapshotId : CURRENT_STATE_ID, nvram_enabled, location );
 	      }
 	      count++;
 	    }

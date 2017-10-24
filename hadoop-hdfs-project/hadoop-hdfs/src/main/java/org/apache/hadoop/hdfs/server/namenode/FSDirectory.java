@@ -137,56 +137,33 @@ private static final int SIZE = 10000;
 	              build());
 	    r.addSnapshottableFeature();
 	    r.setSnapshotQuota(0);
-	    //r.children_for_nvram = NativeIO.allocateNVRAMBuffer(1024*1024*1024, 4096).order(ByteOrder.nativeOrder());
-	   // r.children_for_nvram = NativeIO.allocateNVRAMBuffer(1024*1024*1024, 4096);
-	   //r.children_for_nvram = new ByteBuffer[SIZE];
-	   //r.children_for_nvram = NativeIO.allocateNVRAMBuffer(4096, 4096);
-		 int inode_num = 0;
-	   int off = NativeIO.putIntToNVRAM(4096, 4096, inode_num, 0);
-	    //r.children_for_nvram = ByteBuffer.allocateDirect(3000);
-//	   LOG.info("nvram size = " + r.children_for_nvram.capacity() + " ByteOrder = " + r.children_for_nvram.order());
-//		 LOG.info("limit size = " + r.children_for_nvram.limit());
 
-		// int inode_num = 0; //except root
-		 //int last_position = 0;
-		 //r.children_for_nvram.putInt(inode_num);
-		 //r.children_for_nvram.putInt(last_position);
-		// LOG.info("last_postion1 =" + last_position + " buf = " + r.children_for_nvram);
-		 //last_position = r.children_for_nvram.position();
-		 //LOG.info("last_postion2 =" + last_position + " buf = " + r.children_for_nvram);
-		// r.children_for_nvram.position(4);
-		 //r.children_for_nvram.putInt(last_position);
-		// LOG.info("last_postion3 =" + last_position + " buf = " + r.children_for_nvram);
-		 //r.children_for_nvram.clear();
+//	    int inode_num = NativeIO.readIntFromNVRAM(4096, 4096, 0);
+//	    if(inode_num != 0) {
+//	    	LOG.info("createRoot inode_num = " + inode_num);
+//	    	INode[] list = r.returnLiveINodeList(inode_num);
+//	    	LOG.info("createRoot length = " + list.length);
+//	    	for(int i = 0; i < list.length; i++) {
+//	    		if( list[i] == null) {
+//	    			LOG.info("list is null");
+//	    			break;
+//	    		}
+//	    		if( list[i].isFile() == true ) {
+//	    			BlockInfoContiguous[] blocks = list[i].asFile().getBlocks();
+//	    			for(int j = 0; j < blocks.length; j++) {
+//	    				LOG.info("createRoot block info = " + blocks[j].getBlockId() );
+//	    				namesystem.getBlockManager().addBlockCollection(blocks[j], list[i].asFile());
+//	    			}
+//	    		}	    
+//	    	}
+	    		    	
+	    //}
+	    
+//	    fsNamesys.getBlockManager().processQueuedMessagesForBlock(newBlock);
 
-//		 try {
-//		 NativeIO.freeNVRAMBuffer(r.children_for_nvram);
-//		 } catch (NativeIOException e) {
-//			 LOG.info(e.getMessage());
-//		 }
-	    return r;
+	      return r;
 	  }
-//  private static ByteBuffer createRoot(FSNamesystem namesystem, boolean nvram_enabled) throws NativeIOException, IOException {
-//	    ByteBuffer root;
-//	    final INodeDirectory r = new INodeDirectory(
-//	            INodeId.ROOT_INODE_ID,
-//	            INodeDirectory.ROOT_NAME,
-//	            namesystem.createFsOwnerPermissions(new FsPermission((short) 0755)),
-//	            0L);
-//	        r.addDirectoryWithQuotaFeature(
-//	            new DirectoryWithQuotaFeature.Builder().
-//	                nameSpaceQuota(DirectoryWithQuotaFeature.DEFAULT_NAMESPACE_QUOTA).
-//	                storageSpaceQuota(DirectoryWithQuotaFeature.DEFAULT_STORAGE_SPACE_QUOTA).
-//	                build());
-//	        r.addSnapshottableFeature();
-//	        r.setSnapshotQuota(0);
-//	    byte [] rootDir = BytesUtil.toByteArray(r);
-//	    root = NativeIO.allocateNVRAMBuffer(rootDir.length);
-//	    root = NativeIO.allocateNVRAMBuffer(MAP_SIZE);
-//	    root.put(rootDir);
-//	    return root;
-//	  }
-  
+ 
   private static INodeDirectory createRoot(FSNamesystem namesystem, boolean nvram_enabled, boolean recovery) throws NativeIOException, IOException {
 	    final INodeDirectory r = new INodeDirectory(
 	            INodeId.ROOT_INODE_ID,
@@ -227,6 +204,7 @@ private static final int SIZE = 10000;
   private final int contentCountLimit; // max content summary counts per run
   private final long contentSleepMicroSec;
   private final INodeMap inodeMap; // Synchronized by dirLock
+  public final NvramMap NVramMap;
   ByteBuffer inodeByteMap;
   private long yieldCount = 0; // keep track of lock yield count.
 
@@ -315,6 +293,7 @@ private static final int SIZE = 10000;
     this.inodeId = new INodeId();
     rootDir = createRoot(ns);
     inodeMap = INodeMap.newInstance(rootDir);
+    NVramMap = NvramMap.newInstance(rootDir);
     this.isPermissionEnabled = conf.getBoolean(
       DFSConfigKeys.DFS_PERMISSIONS_ENABLED_KEY,
       DFSConfigKeys.DFS_PERMISSIONS_ENABLED_DEFAULT);
@@ -397,10 +376,13 @@ private static final int SIZE = 10000;
     ezManager = new EncryptionZoneManager(this, conf);
     this.nvram_enabled = false;
   }
+  
   FSDirectory(FSNamesystem ns, Configuration conf, boolean nvram_enabled) throws IOException, NativeIOException {
 	    this.dirLock = new ReentrantReadWriteLock(true); // fair
 	    this.inodeId = new INodeId();
 	    rootDir = createRoot(ns, nvram_enabled);
+	    NVramMap = NvramMap.newInstance(rootDir);
+	    RecoveryFromNVRAM(ns, nvram_enabled, rootDir);
 	    inodeMap = INodeMap.newInstance(rootDir);
 	   // if(nvram_enabled == true) {
 	       //	rootByte = createRoot(ns, nvram_enabled);
@@ -490,11 +472,40 @@ private static final int SIZE = 10000;
 	    LOG.info("nvram_enabled in FSDirectory = " + nvram_enabled);
 	  }
   
-  FSDirectory(FSNamesystem ns, Configuration conf, boolean nvram_enabled, boolean recovery) throws IOException, NativeIOException {
+	private void RecoveryFromNVRAM(FSNamesystem namesystem, boolean nvram_enabled, INodeDirectory r)
+			throws NativeIOException, IOException {
+
+		int inode_num = NativeIO.readIntFromNVRAM(4096, 4096, 0);
+		if (inode_num != 0) {
+			LOG.info("createRoot inode_num = " + inode_num);
+			INode[] list = r.returnLiveINodeList(inode_num);
+			LOG.info("createRoot length = " + list.length);
+			for (int i = 0; i < list.length; i++) {
+				if (list[i] == null) {
+					LOG.info("list is null");
+					break;
+				}
+				if (list[i].isFile() == true) {
+					NVramMap.put(list[i].getLocalName(), list[i].asFile().nvram_location);
+					BlockInfoContiguous[] blocks = list[i].asFile().getBlocks();
+					for (int j = 0; j < blocks.length; j++) {
+						LOG.info("createRoot block info = " + blocks[j].getBlockId());
+						namesystem.getBlockManager().addBlockCollection(blocks[j], list[i].asFile());
+					}
+				} else if (list[i].isDirectory() == true) {
+					NVramMap.put(list[i].getLocalName(), list[i].asDirectory().nvram_location);
+				}
+			}
+
+		}
+	}
+	
+FSDirectory(FSNamesystem ns, Configuration conf, boolean nvram_enabled, boolean recovery) throws IOException, NativeIOException {
 	    this.dirLock = new ReentrantReadWriteLock(true); // fair
 	    this.inodeId = new INodeId();
 	    rootDir = createRoot(ns, nvram_enabled, recovery);
 	    inodeMap = INodeMap.newInstance(rootDir);
+	    NVramMap = NvramMap.newInstance(rootDir);
 //	    if(nvram_enabled == true && recovery == true) {
 //	       	rootByte = createRoot(ns, nvram_enabled, recovery);
 // 	     inodeByteMap = NativeIO.allocateNVRAMBuffer(4096 * 4096);
@@ -703,9 +714,6 @@ private static final int SIZE = 10000;
     INodesInPath newiip;
     writeLock();
     try {
-    	boolean test = this.getEnabled();
-    	LOG.info("nvram_enabled in addINode = " + this.nvram_enabled);
-    	LOG.info("test = " + test);
       newiip = addINode(existing, newNode, this.nvram_enabled);
     } finally {
       writeUnlock();
@@ -767,7 +775,6 @@ private static final int SIZE = 10000;
       Block block, DatanodeStorageInfo[] targets) throws IOException {
     writeLock();
     try {
-    	LOG.info("addBlock call");
       final INodeFile fileINode = inodesInPath.getLastINode().asFile();
       Preconditions.checkState(fileINode.isUnderConstruction());
 
@@ -785,29 +792,11 @@ private static final int SIZE = 10000;
       getBlockManager().addBlockCollection(blockInfo, fileINode);
       fileINode.addBlock(blockInfo);
       if(nvram_enabled) {
-    	BlockInfoContiguous tec = getBlockManager().getStoredBlock(blockInfo);
-      rootDir.removeChild(fileINode, nvram_enabled);
-      rootDir.addChild(fileINode, true, CURRENT_STATE_ID, this.nvram_enabled);
-      INodeFile test = (INodeFile) rootDir.getChild(fileINode.getLocalNameBytes(), CURRENT_STATE_ID, this.nvram_enabled);
-  	  BlockInfoContiguous tec2 = getBlockManager().getStoredBlock(test.getLastBlock());
-      NameNode.stateChangeLog.info("BLOCK* allocate " + tec2 + " for testing ");
-      LOG.info("here is add block num node = " + tec2.numNodes());
-//      BlockInfoContiguousUnderConstruction newblock =
-//    	        new BlockInfoContiguousUnderConstruction(
-//    	            block,
-//    	            fileINode.getFileReplication(),
-//    	            BlockUCState.COMPLETE,
-//    	            targets);
-//      getBlockManager().blocksMap.replaceBlock(newblock);
-//      getBlockManager().checkReplication(test);
-  	  int equal = tec.compareTo(tec2);
-  	  if(equal == 0) {
-  		  
-  		  LOG.info("blockmanager equal!!!!!");
-  	  } else {
-  		  LOG.info("blockManager is not equal!!!!");
-  	
-  	  }
+    	int location = this.NVramMap.get(fileINode.getLocalName());
+    	LOG.info("location in addblock : name = " + fileINode.getLocalName() 
+    	+ " location = " + location);
+    	rootDir.removeChild(fileINode, nvram_enabled, location);
+      rootDir.addChild(fileINode, true, CURRENT_STATE_ID, this.nvram_enabled, this);
       }
       if(NameNode.stateChangeLog.isDebugEnabled()) {
         NameNode.stateChangeLog.debug("DIR* FSDirectory.addBlock: "
@@ -1342,10 +1331,7 @@ private static final int SIZE = 10000;
               + "be created. If this is during upgrade change the name of the "
               + "existing file or directory to another name before upgrading "
               + "to the new release.");
-    }
-    LOG.info("full path = " + existing.getPath() + " inode = " + inode.getFullPathName() );
-    LOG.info("path = " + existing.getINode(pos - 1).getFullPathName());
-    
+    }    
     final INodeDirectory parent = existing.getINode(pos - 1).asDirectory();
     // The filesystem limits are not really quotas, so this check may appear
     // odd. It's because a rename operation deletes the src, tries to add
@@ -1367,9 +1353,7 @@ private static final int SIZE = 10000;
     boolean isRename = (inode.getParent() != null);
     boolean added;
     try {
-    	LOG.info("nvram_enabled in addChild = " + nvram_enabled);
-      added = parent.addChild(inode, true, existing.getLatestSnapshotId(), nvram_enabled);
-      LOG.info("add =" + added);
+      added = parent.addChild(inode, true, existing.getLatestSnapshotId(), nvram_enabled, this);
     } catch (QuotaExceededException e) {
       updateCountNoQuotaCheck(existing, pos, counts.negation());
       throw e;
@@ -1381,14 +1365,15 @@ private static final int SIZE = 10000;
       if (!isRename) {
         AclStorage.copyINodeDefaultAcl(inode);
       }
-      addToInodeMap(inode);
-    }
+
+			addToInodeMap(inode);
+
+		}
     return INodesInPath.append(existing, inode, inode.getLocalNameBytes());
   }
 
   INodesInPath addLastINodeNoQuotaCheck(INodesInPath existing, INode i, boolean nvram_enabled) {
   if(nvram_enabled == true) {
-	  LOG.info("addLastINode No QuotaCheck");
 	  try {
 	      return addLastINode(existing, i, false, nvram_enabled);
 	    } catch (QuotaExceededException e) {
@@ -1431,7 +1416,7 @@ private static final int SIZE = 10000;
 	    final int latestSnapshot = iip.getLatestSnapshotId();
 	    final INode last = iip.getLastINode();
 	    final INodeDirectory parent = iip.getINode(-2).asDirectory();
-	    if (!parent.removeChild(last, latestSnapshot, nvram_enabled)) {
+	    if (!parent.removeChild(last, latestSnapshot, nvram_enabled, this)) {
 	      return -1;
 	    }
 
@@ -1997,8 +1982,7 @@ private static final int SIZE = 10000;
 
   INodesInPath getExistingPathINodes(byte[][] components)
       throws UnresolvedLinkException {
-	  LOG.info("getExistingPathInode");
-    return INodesInPath.resolve(rootDir, components, false, nvram_enabled);
+    return INodesInPath.resolve(rootDir, components, false, nvram_enabled,this);
   }
 
   /**
@@ -2022,8 +2006,7 @@ private static final int SIZE = 10000;
   public INodesInPath getINodesInPath(String path, boolean resolveLink)
       throws UnresolvedLinkException {
     final byte[][] components = INode.getPathComponents(path);
-    LOG.info("getINodesInPath22");
-    return INodesInPath.resolve(rootDir, components, resolveLink, nvram_enabled);
+    return INodesInPath.resolve(rootDir, components, resolveLink, nvram_enabled,this);
   }
 
   /** @return the last inode in the path. */
@@ -2047,9 +2030,8 @@ private static final int SIZE = 10000;
   INodesInPath getINodesInPath4Write(String src, boolean resolveLink)
           throws UnresolvedLinkException, SnapshotAccessControlException {
     final byte[][] components = INode.getPathComponents(src);
-    LOG.info("getINodeInPath4Write is here");
     INodesInPath inodesInPath = INodesInPath.resolve(rootDir, components,
-        resolveLink, nvram_enabled);
+        resolveLink, nvram_enabled,this);
     if (inodesInPath.isSnapshot()) {
       throw new SnapshotAccessControlException(
               "Modification on a read-only snapshot is disallowed");
@@ -2203,5 +2185,6 @@ private static final int SIZE = 10000;
     }
     return nodeAttrs;
   }
+ 
 
 }

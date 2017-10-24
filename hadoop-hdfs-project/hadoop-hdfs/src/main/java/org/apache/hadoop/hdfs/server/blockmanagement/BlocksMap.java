@@ -229,12 +229,10 @@ public class BlocksMap {
     BlockInfoContiguous currentBlock = blocks.get(newBlock);
     assert currentBlock != null : "the block if not in blocksMap";
     // replace block in data-node lists
-    LOG.info("blockmap numNode " + currentBlock.numNodes());
     for (int i = currentBlock.numNodes() - 1; i >= 0; i--) {
       final DatanodeDescriptor dn = currentBlock.getDatanode(i);
       final DatanodeStorageInfo storage = currentBlock.findStorageInfo(dn);
       final boolean removed = storage.removeBlock(currentBlock);
-      LOG.info("blockmap remove " + removed );
       Preconditions.checkState(removed, "currentBlock not found.");
 
       final AddBlockResult result = storage.addBlock(newBlock);
@@ -250,12 +248,10 @@ public class BlocksMap {
 	    BlockInfoContiguous currentBlock = blocks.get(oldBlock);
 	    assert currentBlock != null : "the block if not in blocksMap";
 	    // replace block in data-node lists
-	    LOG.info("blockmap numNode " + currentBlock.numNodes());
 	    for (int i = currentBlock.numNodes() - 1; i >= 0; i--) {
 	      final DatanodeDescriptor dn = currentBlock.getDatanode(i);
 	      final DatanodeStorageInfo storage = currentBlock.findStorageInfo(dn);
 	      final boolean removed = storage.removeBlock(currentBlock);
-	      LOG.info("blockmap remove " + removed );
 	      Preconditions.checkState(removed, "currentBlock not found.");
 
 	      final AddBlockResult result = storage.addBlock(newBlock);
