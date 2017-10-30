@@ -636,15 +636,15 @@ public class BlockManager {
     if(lastBlock.isComplete())
       return false; // already completed (e.g. by syncBlock)
     
-    LOG.info("commitBlock start");
+    //LOG.info("commitBlock start");
     final boolean b = commitBlock(
         (BlockInfoContiguousUnderConstruction) lastBlock, commitBlock);
-    LOG.info("commitBlock d");
+   // LOG.info("commitBlock d");
  
     if(countNodes(lastBlock).liveReplicas() >= minReplication) {
-        LOG.info("commitBlock start");
+     //   LOG.info("commitBlock start");
     	completeBlock(bc, bc.numBlocks()-1, false);
-        LOG.info("completeBlock done");
+       // LOG.info("completeBlock done");
     }
 
     return b;
@@ -679,15 +679,15 @@ public class BlockManager {
 	    if(lastBlock.isComplete())
 	      return false; // already completed (e.g. by syncBlock)
 	    
-	    LOG.info("commitBlock start");
+	    //LOG.info("commitBlock start");
 	    final boolean b = commitBlock(
 	        (BlockInfoContiguousUnderConstruction) lastBlock, commitBlock);
-	    LOG.info("commitBlock d");
+	    //LOG.info("commitBlock d");
 	 
 	    if(countNodes(lastBlock).liveReplicas() >= minReplication) {
-	        LOG.info("commitBlock start");
+	      //  LOG.info("commitBlock start");
 	    	completeBlock(bc, bc.numBlocks()-1, false);
-	        LOG.info("completeBlock done");
+	       // LOG.info("completeBlock done");
 	    }
 
 	    return b;
@@ -910,14 +910,14 @@ public class BlockManager {
     final int numNodes = blocksMap.numNodes(blk);
     final boolean isCorrupt = numCorruptReplicas == numNodes;
     final int numMachines = isCorrupt ? numNodes: numNodes - numCorruptReplicas;
-    LOG.info("block information : blockName = " + blk.getBlockName() +
-    		" blockID = " + blk.getBlockId() + " block bytes = " 
-    + blk.getNumBytes() + " ");
-    LOG.info("numCorruptNode = " + numCorruptNodes);
-    LOG.info("numCorruptReplicas = " + numCorruptReplicas);
-    LOG.info("numNodes = " + numNodes);
-    LOG.info("isCorrupt = " + isCorrupt);
-    LOG.info("numMachines = " + numMachines);
+//    LOG.info("block information : blockName = " + blk.getBlockName() +
+//    		" blockID = " + blk.getBlockId() + " block bytes = " 
+//    + blk.getNumBytes() + " ");
+//    LOG.info("numCorruptNode = " + numCorruptNodes);
+//    LOG.info("numCorruptReplicas = " + numCorruptReplicas);
+//    LOG.info("numNodes = " + numNodes);
+//    LOG.info("isCorrupt = " + isCorrupt);
+//    LOG.info("numMachines = " + numMachines);
 
     final DatanodeStorageInfo[] machines = new DatanodeStorageInfo[numMachines];
     int j = 0;

@@ -2156,9 +2156,9 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
         FSDirectory.isReservedRawName(srcArg) ? null
             : dir.getFileEncryptionInfo(inode, iip.getPathSnapshotId(), iip);
 
-    LOG.info("getBlockLocation = isSnapshot " + iip.getPathSnapshotId() +
-    		" getblocks = " + inode.getBlocks().length + " getBlocks 2 = "
-    				+ inode.getBlocks(iip.getPathSnapshotId()).length);
+//    LOG.info("getBlockLocation = isSnapshot " + iip.getPathSnapshotId() +
+//    		" getblocks = " + inode.getBlocks().length + " getBlocks 2 = "
+//    				+ inode.getBlocks(iip.getPathSnapshotId()).length);
     final LocatedBlocks blocks = blockManager.createLocatedBlocks(
         inode.getBlocks(iip.getPathSnapshotId()), fileSize,
         isUc, offset, length, needBlockToken, iip.isSnapshot(), feInfo);
@@ -3534,7 +3534,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       // Older clients may not have given us an inode ID to work with.
       // In this case, we have to try to resolve the path and hope it
       // hasn't changed or been deleted since the file was opened for write.
-      LOG.info("old analyzeFileState");
+      //LOG.info("old analyzeFileState");
     	iip = dir.getINodesInPath4Write(src);
       inode = iip.getLastINode();
     } else {
@@ -6530,7 +6530,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       }
       boolean nvram_enabled = dir.getEnabled(); 
       int location = dir.NVramMap.get(tmpChild.getLocalName());
-      LOG.info("location in isFileDelete : name = " + tmpChild.getLocalName() + " location = " + location);
+//      LOG.info("location in isFileDelete : name = " + tmpChild.getLocalName() + " location = " + location);
       INode childINode = tmpParent.getChild(tmpChild.getLocalNameBytes(),
           Snapshot.CURRENT_STATE_ID, nvram_enabled, location);
       if (childINode == null || !childINode.equals(tmpChild)) {

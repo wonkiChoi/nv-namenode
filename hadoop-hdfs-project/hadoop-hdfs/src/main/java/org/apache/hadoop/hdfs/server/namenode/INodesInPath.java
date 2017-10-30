@@ -321,7 +321,7 @@ public class INodesInPath {
 	      } else {
 	        // normal case, and also for resolving file/dir under snapshot root
 	        int location = fsd.NVramMap.get(new String(childName));
-	        LOG.info("location in resolve = " + location);
+	        //LOG.info("location in resolve = " + location);
 	    	  curNode = dir.getChild(childName,
 	            isSnapshot ? snapshotId : CURRENT_STATE_ID, nvram_enabled, location );
 	      }

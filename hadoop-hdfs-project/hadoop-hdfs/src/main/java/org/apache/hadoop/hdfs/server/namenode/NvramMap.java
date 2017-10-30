@@ -37,7 +37,7 @@ public class NvramMap {
   
   static NvramMap newInstance(INodeDirectory rootDir) {
     // Compute the map capacity by allocating 1% of total memory
-    int capacity = LightWeightGSet.computeCapacity(1, "NvramMap");
+    int capacity = LightWeightGSet.computeCapacity(20, "NvramMap");
     HashMap<String, Integer> map = new HashMap<>(capacity);
     map.put(rootDir.getLocalName(), (int)0);
     return new NvramMap(map);
@@ -87,6 +87,14 @@ public class NvramMap {
 			return map.get(name);
 		} else {
 			return -1;
+		}
+	}
+	
+	public boolean isContain(String name) {
+		if (map.containsKey(name)) {
+			return true;
+		} else {
+			return false;
 		}
 	}
   

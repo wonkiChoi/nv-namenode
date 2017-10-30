@@ -795,8 +795,9 @@ FSDirectory(FSNamesystem ns, Configuration conf, boolean nvram_enabled, boolean 
     	int location = this.NVramMap.get(fileINode.getLocalName());
     	LOG.info("location in addblock : name = " + fileINode.getLocalName() 
     	+ " location = " + location);
-    	rootDir.removeChild(fileINode, nvram_enabled, location);
-      rootDir.addChild(fileINode, true, CURRENT_STATE_ID, this.nvram_enabled, this);
+    	//rootDir.removeChild(fileINode, nvram_enabled, location);
+      //rootDir.addChild(fileINode, true, CURRENT_STATE_ID, this.nvram_enabled, this);
+    	rootDir.addBlockNVRAM(fileINode, location);
       }
       if(NameNode.stateChangeLog.isDebugEnabled()) {
         NameNode.stateChangeLog.debug("DIR* FSDirectory.addBlock: "

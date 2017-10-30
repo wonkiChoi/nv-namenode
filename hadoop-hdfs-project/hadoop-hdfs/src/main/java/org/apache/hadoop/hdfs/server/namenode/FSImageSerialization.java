@@ -148,8 +148,8 @@ public class FSImageSerialization {
 			int new_new_pos = 0;
 			new_new_pos = NativeIO.putIntToNVRAM(4096, new_offset, 1, new_pos);
 			for (Block blk : blocks) {
-				// LOG.info("writeBlocks blk information = " + blk.getBlockId()+
-				// " " + blk.getNumBytes() + " " + blk.getGenerationStamp());
+//				 LOG.info("writeBlocks blk information = " + blk.getBlockId()+
+//				 " " + blk.getNumBytes() + " " + blk.getGenerationStamp());
 				new_new_pos = NativeIO.putLongToNVRAM(4096, new_offset, blk.getBlockId(), new_new_pos);
 				new_new_pos = NativeIO.putLongToNVRAM(4096, new_offset, blk.getNumBytes(), new_new_pos);
 				new_new_pos = NativeIO.putLongToNVRAM(4096, new_offset, blk.getGenerationStamp(), new_new_pos);
@@ -373,22 +373,20 @@ public class FSImageSerialization {
 		new_pos = new_pos + 100;
 		clientMachine = new String(str_second);
 
+		PermissionStatus perm = PermissionStatus.read(new_offset, new_pos);
+
+		INodeFile file = null;
+		//file.pos = perm.pos;
+		new_pos = perm.pos;
 		int numBlocks = NativeIO.readIntFromNVRAM(4096, new_offset, new_pos);
 		new_pos = new_pos + 4;
 
-		INodeFile file = null;
 		if (numBlocks == 0) {
-
-			PermissionStatus perm = PermissionStatus.read(new_offset, new_pos);
-
 			file = new INodeFile(inodeId, name, perm, modificationTime, accessTime, BlockInfoContiguous.EMPTY_ARRAY,
 					blockReplication, preferredBlockSize, HdfsConstants.HOT_STORAGE_POLICY_ID);
-			file.pos = perm.pos;
-
 			if (writeUnderConstruction == 1) {
 				file.toUnderConstruction(clientName, clientMachine);
 			}
-
 		} else {
 			BlockInfoContiguous[] blocks = new BlockInfoContiguous[numBlocks];
 			Block blk = new Block();
@@ -405,15 +403,13 @@ public class FSImageSerialization {
 //				LOG.info("block read info = " + blocks[i].getBlockId() + " " + blocks[i].getNumBytes() + " "
 //						+ blocks[i].getGenerationStamp());
 			}
-
-			PermissionStatus perm = PermissionStatus.read(new_offset, new_pos);
-			file = new INodeFile(inodeId, name, perm, modificationTime, accessTime, blocks, blockReplication,
-					preferredBlockSize, HdfsConstants.HOT_STORAGE_POLICY_ID);
-			file.pos = perm.pos;
+			file = new INodeFile(inodeId, name, perm, modificationTime, accessTime, blocks, blockReplication, preferredBlockSize,
+					HdfsConstants.HOT_STORAGE_POLICY_ID);
 			if (writeUnderConstruction == 1) {
 				file.toUnderConstruction(clientName, clientMachine);
 			}
 		}
+		file.pos = new_pos;
 		return file;
 	}
   
@@ -499,9 +495,10 @@ public class FSImageSerialization {
 
 	  }
   
-	public static int writeINodeFile(INodeFile file, int new_offset, boolean writeUnderConstruction, int position)
+	public static int writeINodeFile(INodeFile file, int new_offset, boolean writeUnderConstruction, int position, int block)
 			throws IOException {
 		int new_pos = 0;
+		if ( block == 0 ){
 		final byte[] name = file.getLocalNameBytes();
 		new_pos = NativeIO.putIntToNVRAM(4096, new_offset, name.length, position);
 		new_pos = NativeIO.putBAToNVRAM(4096, new_offset, name, new_pos);
@@ -540,11 +537,12 @@ public class FSImageSerialization {
 		new_pos = NativeIO.putIntToNVRAM(4096, new_offset, clientMachine.length, new_pos);
 
 		new_pos = NativeIO.putBAToNVRAM(4096, new_offset, clientMachine, new_pos);
-
-		new_pos = writeBlocks(file.getBlocks(), new_offset, new_pos);
-
 		new_pos = writePermissionStatus(file, new_offset, new_pos);
-
+//		LOG.info("new_pos after write Permission = " + new_pos);
+		new_pos = writeBlocks(file.getBlocks(), new_offset, new_pos);
+		} else {
+		new_pos = writeBlocks(file.getBlocks(), new_offset, 576);
+		}
 		return new_pos;
 	}
 
