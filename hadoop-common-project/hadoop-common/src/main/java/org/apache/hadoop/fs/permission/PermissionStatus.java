@@ -102,16 +102,19 @@ public class PermissionStatus implements Writable {
     permission = FsPermission.read(in);
   }
   
-  public void readFields(int new_offset, int pos) throws IOException {
-	  int size = NativeIO.readIntFromNVRAM(4096, new_offset, pos);
+  public void readFields(int new_offset, int pos, long ptr) throws IOException {
+	  //int size = NativeIO.readIntFromNVRAM(4096, new_offset, pos);
+	  int size = NativeIO.readIntTest(ptr, new_offset + pos);
 	  int new_pos = pos + 4;
-	  username = new String(NativeIO.readBAFromNVRAM(4096, new_offset, new_pos, size));
+	  //username = new String(NativeIO.readBAFromNVRAM(4096, new_offset, new_pos, size));
+	  username = new String(NativeIO.readBATest(ptr, new_offset + new_pos, size));
 	  new_pos = new_pos + 100;
-	  size = NativeIO.readIntFromNVRAM(4096, new_offset, new_pos);
+	  //size = NativeIO.readIntFromNVRAM(4096, new_offset, new_pos);
+	  size = NativeIO.readIntTest(ptr, new_offset + new_pos);
 	  new_pos = new_pos + 4;
-	  groupname = new String(NativeIO.readBAFromNVRAM(4096, new_offset, new_pos, size));
+	  groupname = new String(NativeIO.readBATest(ptr, new_offset + new_pos, size));
 	  new_pos = new_pos + 100;
-	  permission = FsPermission.read(new_offset, new_pos);
+	  permission = FsPermission.read(new_offset, new_pos, ptr);
 	  new_pos = new_pos + 4;
 	  this.pos = new_pos;
 	  }
@@ -151,9 +154,9 @@ public class PermissionStatus implements Writable {
 	    return p;
 	  }
   
-  public static PermissionStatus read(int new_offset, int pos) throws IOException {
+  public static PermissionStatus read(int new_offset, int pos, long ptr) throws IOException {
 	    PermissionStatus p = new PermissionStatus();
-	    p.readFields(new_offset, pos);
+	    p.readFields(new_offset, pos, ptr);
 	    return p;
 	  }
 

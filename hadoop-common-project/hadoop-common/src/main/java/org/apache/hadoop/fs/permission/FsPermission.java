@@ -154,8 +154,9 @@ public class FsPermission implements Writable {
 	    fromShort((short)in.getInt());
 	  }
   
-  public void readFields(int new_offset, int pos) throws IOException {
-	    fromShort((short)NativeIO.readIntFromNVRAM(4096, new_offset, pos));
+  public void readFields(int new_offset, int pos, long ptr) throws IOException {
+	    //fromShort((short)NativeIO.readIntFromNVRAM(4096, new_offset, pos));
+	  fromShort((short)NativeIO.readIntTest(ptr, new_offset + pos));
 	  }
 
   /**
@@ -173,9 +174,9 @@ public class FsPermission implements Writable {
 	    return p;
 	  }
   
-  public static FsPermission read(int new_offset, int pos) throws IOException {
+  public static FsPermission read(int new_offset, int pos, long ptr) throws IOException {
 	    FsPermission p = new FsPermission();
-	    p.readFields(new_offset, pos);
+	    p.readFields(new_offset, pos, ptr);
 	    return p;
 	  }
   /**

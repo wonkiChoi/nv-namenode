@@ -10,9 +10,20 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class nvram_mmap {
-	//  public static final java.util.logging.Logger LOG =
-		//      LoggerFactory.getLogger(nvram_mmap.class.getName());	
+	  public static final Logger LOG =
+		      LoggerFactory.getLogger(nvram_mmap.class.getName());	
 	void nvram_mmap_test (int size) {
+		
+		try {
+		long addr = NativeIO.ReturnNVRAMAddress(4096, 4096);
+		int data = 23;
+		NativeIO.putIntTest(addr, data, 0);
+		int temp = NativeIO.readIntTest(addr, 0);
+		LOG.info("temp data = " + data);
+		
+		} catch (NativeIOException e) {
+			e.printStackTrace();
+		}
 //		try {
 //			if(NativeCodeLoader.isNativeCodeLoaded()){
 //			ByteBuffer byteBuffer = ByteBuffer.allocateDirect(100);

@@ -474,7 +474,7 @@ public class INodeDirectory extends INodeWithAdditionalFields
    */
 	public INode getChild(byte[] name, int snapshotId, boolean nvram_enabled, int location) {
 		if (nvram_enabled == true) {
-			//LOG.info("trying to find = " + new String(name));
+			LOG.info("trying to find = " + new String(name));
 			//int index = 0;
 			try {
 				if(location == -1)
@@ -483,10 +483,14 @@ public class INodeDirectory extends INodeWithAdditionalFields
 				}
 				int pos = 0;
 				int new_offset = location;
-				//LOG.info("new_offset = " + new_offset);
-				int root = NativeIO.readIntFromNVRAM(4096, new_offset, pos);
+				LOG.info("new_offset = " + new_offset);
+				//int root = NativeIO.readIntFromNVRAM(4096, new_offset, pos);
+				int root = NativeIO.readIntTest(FSDirectory.nvramAddress, new_offset + pos);
+				LOG.info("root = " + root);
 				pos = pos + 4;
-				int file_dir = NativeIO.readIntFromNVRAM(4096, new_offset, pos);
+				//int file_dir = NativeIO.readIntFromNVRAM(4096, new_offset, pos);
+				int file_dir = NativeIO.readIntTest(FSDirectory.nvramAddress, new_offset + pos);
+				LOG.info("file_dir = " + file_dir);
 				pos = pos + 4;
 
 				INode inode = null;
@@ -512,7 +516,8 @@ public class INodeDirectory extends INodeWithAdditionalFields
 					return null;
 				}
 
-				int commit = NativeIO.readIntFromNVRAM(4096, new_offset, 4092);
+				//int commit = NativeIO.readIntFromNVRAM(4096, new_offset, 4092);
+				int commit = NativeIO.readIntTest(FSDirectory.nvramAddress, new_offset + 4092);
 				pos = pos + 4;
 
 				if (inode == null)
@@ -763,7 +768,8 @@ public class INodeDirectory extends INodeWithAdditionalFields
 
 //				int past_pos = pos;
 //				int commit = NativeIO.readIntFromNVRAM(4096, new_offset, pos);
-				int commit = NativeIO.readIntFromNVRAM(4096, location, 4092);
+				//int commit = NativeIO.readIntFromNVRAM(4096, location, 4092);
+				int commit = NativeIO.readIntTest(FSDirectory.nvramAddress, location + 4092);
 				//pos = pos + 4;
 				// LOG.info("buf = " + children_for_nvram);
 
@@ -772,7 +778,8 @@ public class INodeDirectory extends INodeWithAdditionalFields
 
 				if (commit == 1) {
 	//				NativeIO.putIntToNVRAM(4096, new_offset, 0, past_pos);
-					NativeIO.putIntToNVRAM(4096, location, 0, 4092);
+					//NativeIO.putIntToNVRAM(4096, location, 0, 4092);
+					NativeIO.putIntTest(FSDirectory.nvramAddress, 0, location + 4092);
 					return true;
 				}
 		
@@ -864,10 +871,12 @@ public class INodeDirectory extends INodeWithAdditionalFields
 			try {
 				while (index < inode_num) {
 					int pos = 0;
-					int new_offset = 8192 + (index * 4096);
-					int root = NativeIO.readIntFromNVRAM(4096, new_offset, pos);
+					int new_offset = 4096 + (index * 4096);
+					//int root = NativeIO.readIntFromNVRAM(4096, new_offset, pos);
+					int root = NativeIO.readIntTest(FSDirectory.nvramAddress, new_offset + pos);
 					pos = pos + 4;
-					int file_dir = NativeIO.readIntFromNVRAM(4096, new_offset, pos);
+					//int file_dir = NativeIO.readIntFromNVRAM(4096, new_offset, pos);
+					int file_dir = NativeIO.readIntTest(FSDirectory.nvramAddress, new_offset + pos);
 					pos = pos + 4;
 
 					INode inode = null;
@@ -893,8 +902,8 @@ public class INodeDirectory extends INodeWithAdditionalFields
 						}
 					} 
 
-					int past_pos = pos;
-					int commit = NativeIO.readIntFromNVRAM(4096, new_offset, pos);
+					//int commit = NativeIO.readIntFromNVRAM(4096, new_offset, pos);
+					int commit = NativeIO.readIntTest(FSDirectory.nvramAddress, new_offset + 4092);
 					pos = pos + 4;
 					if (commit == 1) {
 						LOG.info("return Live = " + inode.getLocalName());
@@ -949,7 +958,8 @@ public class INodeDirectory extends INodeWithAdditionalFields
 //				
 //				int past_pos = pos;
 //				int commit = NativeIO.readIntFromNVRAM(4096, new_offset, pos);
-				int commit = NativeIO.readIntFromNVRAM(4096, location, 4092);
+				//int commit = NativeIO.readIntFromNVRAM(4096, location, 4092);
+				int commit = NativeIO.readIntTest(FSDirectory.nvramAddress, location + 4092);
 //
 //				pos = pos + 4;
 
@@ -963,9 +973,13 @@ public class INodeDirectory extends INodeWithAdditionalFields
 //							NativeIO.putLongToNVRAM(4096, location, blocks[i].getNumBytes(), index)
 //						}
 //						bc.getBlocks()
-						NativeIO.putLongToNVRAM(4096, location, bc.getLastBlock().getNumBytes(),
-								580 + ((24 * (numblocks - 1)) + 8));
-						NativeIO.putIntToNVRAM(4096, location, 2, 152);
+						// mmap use
+//						NativeIO.putLongToNVRAM(4096, location, bc.getLastBlock().getNumBytes(),
+//								580 + ((24 * (numblocks - 1)) + 8));
+						NativeIO.putLongTest( FSDirectory.nvramAddress, bc.getLastBlock().getNumBytes(), 
+								location + 580 + ((24 * (numblocks - 1)) + 8));
+						//NativeIO.putIntToNVRAM(4096, location, 2, 152);
+						NativeIO.putIntTest(FSDirectory.nvramAddress, 2, location + 152);
 
 //						 LOG.info("numblocks in commitChild = " +
 //						 numblocks + " " +
@@ -1272,11 +1286,15 @@ public class INodeDirectory extends INodeWithAdditionalFields
 			try {
 //				boolean new_inode = fsd.NVramMap.isContain(node.getLocalName());
 
-				inode_num = NativeIO.readIntFromNVRAM(4096, 4096, 0);
+				//inode_num = NativeIO.readIntFromNVRAM(4096, 4096, 0);
+				inode_num = NativeIO.readIntTest(FSDirectory.nvramAddress, 0);
 				inode_num = inode_num + 1;
-				NativeIO.putIntToNVRAM(4096, 4096, inode_num, 0);
+				//mmap use
+				//NativeIO.putIntToNVRAM(4096, 4096, inode_num, 0);
+				NativeIO.putIntTest(FSDirectory.nvramAddress, inode_num, 0);
 
-				int new_offset = 8192 + 4096 * (inode_num - 1);
+				//int new_offset = 8192 + 4096 * (inode_num - 1);
+				int new_offset = 4096 + 4096 * (inode_num - 1);
 				//int new_offset = 8192 + (4096 * inode_num);
 				fsd.NVramMap.put(node.getLocalName(), new_offset);
 //				LOG.info("location in addChild : name =" + node.getLocalName()+
@@ -1289,23 +1307,26 @@ public class INodeDirectory extends INodeWithAdditionalFields
 
 				int position = 0;
 				if (this.getId() == INodeId.ROOT_INODE_ID) {
-					position = NativeIO.putIntToNVRAM(4096, new_offset, 0, 0);
+					//position = NativeIO.putIntToNVRAM(4096, new_offset, 0, 0);
+					position = NativeIO.putIntTest(FSDirectory.nvramAddress, 0, new_offset);
 				} else {
-
-					position = NativeIO.putIntToNVRAM(4096, new_offset, 1, 0);
+					//position = NativeIO.putIntToNVRAM(4096, new_offset, 1, 0);
+					position = NativeIO.putIntTest(FSDirectory.nvramAddress, 1, new_offset);
 				}
 
 				if (node.isFile()) { // file 0 , directory 1
-
-					position = NativeIO.putIntToNVRAM(4096, new_offset, 0, position);
+					//position = NativeIO.putIntToNVRAM(4096, new_offset, 0, position);
+					position = NativeIO.putIntTest(FSDirectory.nvramAddress, 0, position);
 					position = FSImageSerialization.writeINodeFile(node.asFile(), new_offset,
 							((INodeFile) node).isUnderConstruction(), position, 0);
 				} else if (node.isDirectory()) {
-					position = NativeIO.putIntToNVRAM(4096, new_offset, 1, position);
+					//position = NativeIO.putIntToNVRAM(4096, new_offset, 1, position);
+					position = NativeIO.putIntTest(FSDirectory.nvramAddress, 1, position);
 					position = FSImageSerialization.writeINodeDirectory(node.asDirectory(), new_offset, position);			
 				}
-				//position = NativeIO.putIntToNVRAM(4096, new_offset, commit, position);
-				position = NativeIO.putIntToNVRAM(4096, new_offset, commit, 4092);
+				
+				//position = NativeIO.putIntToNVRAM(4096, new_offset, commit, 4092);
+				position = NativeIO.putIntTest(FSDirectory.nvramAddress, commit, new_offset + 4092);
 
 			} catch (IOException e) {
 				// TODO Auto-generated catch block
@@ -1348,7 +1369,9 @@ public class INodeDirectory extends INodeWithAdditionalFields
 //					position = NativeIO.putIntToNVRAM(4096, location, 1, position);
 //					position = FSImageSerialization.writeINodeDirectory(node.asDirectory(), location, position);			
 //				}
-				NativeIO.putIntToNVRAM(4096, location, commit, 4092);
+					//mmap use
+				//NativeIO.putIntToNVRAM(4096, location, commit, 4092);
+				NativeIO.putIntTest(FSDirectory.nvramAddress, commit, location + 4092);
 
 			} catch (IOException e) {
 				// TODO Auto-generated catch block

@@ -137,6 +137,8 @@ private static final int SIZE = 10000;
 	              build());
 	    r.addSnapshottableFeature();
 	    r.setSnapshotQuota(0);
+	    //mmap use
+	    nvramAddress = NativeIO.ReturnNVRAMAddress(1024*1024*1024, 4096);
 
 //	    int inode_num = NativeIO.readIntFromNVRAM(4096, 4096, 0);
 //	    if(inode_num != 0) {
@@ -196,6 +198,7 @@ private static final int SIZE = 10000;
 
   INodeDirectory rootDir;
   ByteBuffer rootByte;
+  public static long nvramAddress;
   private final FSNamesystem namesystem;
   private volatile boolean skipQuotaCheck = false; //skip while consuming edits
   private final int maxComponentLength;
@@ -475,7 +478,9 @@ private static final int SIZE = 10000;
 	private void RecoveryFromNVRAM(FSNamesystem namesystem, boolean nvram_enabled, INodeDirectory r)
 			throws NativeIOException, IOException {
 
-		int inode_num = NativeIO.readIntFromNVRAM(4096, 4096, 0);
+		// mmap use
+		//int inode_num = NativeIO.readIntFromNVRAM(4096, 4096, 0);
+		int inode_num = NativeIO.readIntTest(nvramAddress, 0);
 		if (inode_num != 0) {
 			LOG.info("createRoot inode_num = " + inode_num);
 			INode[] list = r.returnLiveINodeList(inode_num);
@@ -2186,6 +2191,5 @@ FSDirectory(FSNamesystem ns, Configuration conf, boolean nvram_enabled, boolean 
     }
     return nodeAttrs;
   }
- 
 
 }
