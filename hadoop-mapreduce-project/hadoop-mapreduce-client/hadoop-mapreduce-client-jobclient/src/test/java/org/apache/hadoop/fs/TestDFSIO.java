@@ -404,6 +404,7 @@ public class TestDFSIO implements Tool {
     @Override // IOMapperBase
     public Closeable getIOStream(String name) throws IOException {
       // create file
+    	LOG.info("getIOStream ?????????");
       OutputStream out =
           fs.create(new Path(getDataDir(getConf()), name), true, bufferSize);
       if(compressionCodec != null)
@@ -432,9 +433,13 @@ public class TestDFSIO implements Tool {
   }
 
   private void writeTest(FileSystem fs) throws IOException {
+	  LOG.info("writeTest -----------ing");
+	  boolean success;
     Path writeDir = getWriteDir(config);
-    fs.delete(getDataDir(config), true);
-    fs.delete(writeDir, true);
+    success = fs.delete(getDataDir(config), true);
+    LOG.info("getDataDir success = " + success);
+    success = fs.delete(writeDir, true);
+    LOG.info("getDataDir success = " + success);
     
     runIOTest(WriteMapper.class, writeDir);
   }

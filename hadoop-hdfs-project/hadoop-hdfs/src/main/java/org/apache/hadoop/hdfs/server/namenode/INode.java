@@ -62,6 +62,8 @@ public static final Log LOG = LogFactory.getLog(INode.class);
 
   /** parent is either an {@link INodeDirectory} or an {@link INodeReference}.*/
   private INode parent = null;
+  public int parent_location;
+  //public int parent_number;
 
   INode(INode parent) {
     this.parent = parent;

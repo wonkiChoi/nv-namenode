@@ -3271,6 +3271,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
   private LastBlockWithStatus appendFileInt(final String srcArg, String holder,
       String clientMachine, boolean newBlock, boolean logRetryCache)
       throws IOException {
+	  LOG.info("appendFileInt called");
     String src = srcArg;
     NameNode.stateChangeLog.debug(
         "DIR* NameSystem.appendFile: src={}, holder={}, clientMachine={}",
@@ -3408,8 +3409,6 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
           clientMachine);
       replication = pendingFile.getFileReplication();
       storagePolicyID = pendingFile.getStoragePolicyID();
-      LOG.info("target file = " + pendingFile.getFullPathName());
-      LOG.info("info = " + blockSize + " " + clientMachine + " " + replication);
     } finally {
       readUnlock();
     }
@@ -3540,7 +3539,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     } else {
       // Newer clients pass the inode ID, so we can just get the inode
       // directly.
-    	LOG.info("new analyzeFileState");
+    	//LOG.info("new analyzeFileState");
       inode = dir.getInode(fileId);
       iip = INodesInPath.fromINode(inode);
       if (inode != null) {
@@ -3826,11 +3825,11 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
         // Older clients may not have given us an inode ID to work with.
         // In this case, we have to try to resolve the path and hope it
         // hasn't changed or been deleted since the file was opened for write.
-        LOG.info("old complete~!");
+        //LOG.info("old complete~!");
     	  iip = dir.getINodesInPath(src, true);
         inode = iip.getLastINode();
       } else {
-    	  LOG.info("new complete~!");
+    	  //LOG.info("new complete~!");
         inode = dir.getInode(fileId);
         iip = INodesInPath.fromINode(inode);
         if (inode != null) {
@@ -4526,7 +4525,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     // Create permanent INode, update blocks. No need to replace the inode here
     // since we just remove the uc feature from pendingFile
     pendingFile.toCompleteFile(now());
-    if(this.dir.nvram_enabled) {
+    if(this.dir.nvram_enabled && pendingFile.getLastBlock() != null) {
     this.dir.rootDir.commitChild(pendingFile, blockManager.getBlockCollection(pendingFile.getLastBlock()), this.dir.nvram_enabled, dir);
     }
 

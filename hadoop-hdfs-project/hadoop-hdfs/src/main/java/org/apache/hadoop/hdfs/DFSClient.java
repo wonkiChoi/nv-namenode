@@ -1198,7 +1198,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
   
   public LocatedBlocks getLocatedBlocks(String src, long start)
       throws IOException {
-	  LOG.info("getlocatedblock in dfsclient = " + getLocatedBlocks(src, start, dfsClientConf.prefetchSize).toString());
+	  //LOG.info("getlocatedblock in dfsclient = " + getLocatedBlocks(src, start, dfsClientConf.prefetchSize).toString());
     return getLocatedBlocks(src, start, dfsClientConf.prefetchSize);
   }
 
@@ -2084,6 +2084,7 @@ public class DFSClient implements java.io.Closeable, RemotePeerFactory,
     checkOpen();
     TraceScope scope = getPathTraceScope("listPaths", src);
     try {
+    	LOG.info("listpath = " + src);
       return namenode.getListing(src, startAfter, needLocation);
     } catch(RemoteException re) {
       throw re.unwrapRemoteException(AccessControlException.class,

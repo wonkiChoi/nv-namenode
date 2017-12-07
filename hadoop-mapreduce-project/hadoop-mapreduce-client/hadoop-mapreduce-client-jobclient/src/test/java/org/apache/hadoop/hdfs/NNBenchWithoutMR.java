@@ -324,7 +324,8 @@ public class NNBenchWithoutMR {
     
     fileSys = FileSystem.get(jobConf);
     String uniqueId = java.net.InetAddress.getLocalHost().getHostName();
-    taskDir = new Path(baseDir, uniqueId);
+    //taskDir = new Path(baseDir, uniqueId);
+    taskDir = new Path(baseDir.toString());
     // initialize buffer used for writing/reading file
     buffer = new byte[(int) Math.min(bytesPerFile, 32768L)];
     

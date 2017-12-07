@@ -179,7 +179,6 @@ private static final int SIZE = 10000;
 	              build());
 	    r.addSnapshottableFeature();
 	    r.setSnapshotQuota(0);
-	    r.children_for_nvram = NativeIO.allocateNVRAMBuffer(1024, 4096);
 	    return r;
 	  }
 
@@ -478,6 +477,8 @@ private static final int SIZE = 10000;
 	private void RecoveryFromNVRAM(FSNamesystem namesystem, boolean nvram_enabled, INodeDirectory r)
 			throws NativeIOException, IOException {
 
+		// can be improved, in current read all INode contents, but we need only name and commit
+		
 		// mmap use
 		//int inode_num = NativeIO.readIntFromNVRAM(4096, 4096, 0);
 		int inode_num = NativeIO.readIntTest(nvramAddress, 0);
@@ -798,8 +799,8 @@ FSDirectory(FSNamesystem ns, Configuration conf, boolean nvram_enabled, boolean 
       fileINode.addBlock(blockInfo);
       if(nvram_enabled) {
     	int location = this.NVramMap.get(fileINode.getLocalName());
-    	LOG.info("location in addblock : name = " + fileINode.getLocalName() 
-    	+ " location = " + location);
+    	//LOG.info("location in addblock : name = " + fileINode.getLocalName() 
+    	//+ " location = " + location);
     	//rootDir.removeChild(fileINode, nvram_enabled, location);
       //rootDir.addChild(fileINode, true, CURRENT_STATE_ID, this.nvram_enabled, this);
     	rootDir.addBlockNVRAM(fileINode, location);

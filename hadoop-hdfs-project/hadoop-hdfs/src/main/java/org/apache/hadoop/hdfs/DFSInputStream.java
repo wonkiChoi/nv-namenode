@@ -486,7 +486,7 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
       assert (locatedBlocks != null) : "locatedBlocks is null";
 
       final LocatedBlock blk;
-      DFSClient.LOG.info("getBlockAt in");
+      //DFSClient.LOG.info("getBlockAt in");
       //check offset
       if (offset < 0 || offset >= getFileLength()) {
         throw new IOException("offset < 0 || offset >= getFileLength(), offset="
@@ -623,7 +623,7 @@ implements ByteBufferReadable, CanSetDropBehind, CanSetReadahead,
     // Will be getting a new BlockReader.
     closeCurrentBlockReader();
 
-    DFSClient.LOG.info("blockSeekTo in");
+    //DFSClient.LOG.info("blockSeekTo in");
     //
     // Connect to best DataNode for desired Block, with potential offset
     //

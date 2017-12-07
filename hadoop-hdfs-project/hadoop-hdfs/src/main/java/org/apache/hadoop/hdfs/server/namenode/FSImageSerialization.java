@@ -153,7 +153,7 @@ public class FSImageSerialization {
 		} else {
 			int new_new_pos = 0;
 			//new_new_pos = NativeIO.putIntToNVRAM(4096, new_offset, 1, new_pos);
-			new_new_pos = NativeIO.putIntTest(FSDirectory.nvramAddress, 1, new_pos);
+			new_new_pos = NativeIO.putIntTest(FSDirectory.nvramAddress, blocks.length, new_pos);
 			for (Block blk : blocks) {
 //				 LOG.info("writeBlocks blk information = " + blk.getBlockId()+
 //				 " " + blk.getNumBytes() + " " + blk.getGenerationStamp());
@@ -357,7 +357,7 @@ public class FSImageSerialization {
 		int new_pos = pos + 4;
 		//byte[] name = NativeIO.readBAFromNVRAM(4096, new_offset, new_pos, length);
 		byte[] name = NativeIO.readBATest(FSDirectory.nvramAddress, new_offset + new_pos, length);
-		new_pos = new_pos + 100;
+		new_pos = new_pos + 300;
 
 		//long inodeId = NativeIO.readLongFromNVRAM(4096, new_offset, new_pos);
 		long inodeId = NativeIO.readLongTest(FSDirectory.nvramAddress, new_offset + new_pos);
@@ -386,7 +386,7 @@ public class FSImageSerialization {
 		new_pos = new_pos + 4;
 		//byte[] str = NativeIO.readBAFromNVRAM(4096, new_offset, new_pos, size);
 		byte[] str = NativeIO.readBATest(FSDirectory.nvramAddress, new_offset + new_pos, size);
-		new_pos = new_pos + 100;
+		new_pos = new_pos + 300;
 		clientName = new String(str);
 
 		//int size_second = NativeIO.readIntFromNVRAM(4096, new_offset, new_pos);
@@ -394,7 +394,7 @@ public class FSImageSerialization {
 		new_pos = new_pos + 4;
 		//byte[] str_second = NativeIO.readBAFromNVRAM(4096, new_offset, new_pos, size_second);
 		byte[] str_second = NativeIO.readBATest(FSDirectory.nvramAddress, new_offset + new_pos, size_second);
-		new_pos = new_pos + 100;
+		new_pos = new_pos + 300;
 		clientMachine = new String(str_second);
 
 		PermissionStatus perm = PermissionStatus.read(new_offset, new_pos, FSDirectory.nvramAddress);
@@ -448,7 +448,7 @@ public class FSImageSerialization {
 		int new_pos = pos + 4;
 		//byte[] name = NativeIO.readBAFromNVRAM(4096, new_offset, new_pos, length);
 		byte[] name = NativeIO.readBATest(FSDirectory.nvramAddress, new_offset + new_pos, length);
-		new_pos = new_pos + 100;
+		new_pos = new_pos + 300;
 
 		//long inodeId = NativeIO.readLongFromNVRAM(4096, new_offset, new_pos);
 		long inodeId = NativeIO.readLongTest(FSDirectory.nvramAddress, new_offset + new_pos);
@@ -585,7 +585,7 @@ public class FSImageSerialization {
 //		LOG.info("new_pos after write Permission = " + new_pos);
 		new_pos = writeBlocks(file.getBlocks(), new_offset, new_pos);
 		} else {
-		new_pos = writeBlocks(file.getBlocks(), new_offset, new_offset + 576);
+		new_pos = writeBlocks(file.getBlocks(), new_offset, new_offset + 1576);
 		}
 		return new_pos;
 	}

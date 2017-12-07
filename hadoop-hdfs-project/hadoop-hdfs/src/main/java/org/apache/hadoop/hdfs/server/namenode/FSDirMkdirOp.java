@@ -37,11 +37,13 @@ import java.io.IOException;
 import java.util.AbstractMap;
 import java.util.List;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import static org.apache.hadoop.util.Time.now;
 
 class FSDirMkdirOp {
-
+	static final Logger LOG = LoggerFactory.getLogger(FSDirMkdirOp.class);
   static HdfsFileStatus mkdirs(FSNamesystem fsn, String src,
       PermissionStatus permissions, boolean createParent) throws IOException {
     FSDirectory fsd = fsn.getFSDirectory();
@@ -94,7 +96,6 @@ class FSDirMkdirOp {
             throw new IOException("Failed to create directory: " + src);
           }
         }
-
         if ((existing = createChildrenDirectories(fsd, existing,
             nonExisting.subList(length - 1, length), permissions)) == null) {
           throw new IOException("Failed to create directory: " + src);
@@ -164,7 +165,7 @@ class FSDirMkdirOp {
     assert fsd.hasWriteLock();
 
     for (String component : children) {
-      existing = createSingleDirectory(fsd, existing, component, perm);
+    	existing = createSingleDirectory(fsd, existing, component, perm);
       if (existing == null) {
         return null;
       }

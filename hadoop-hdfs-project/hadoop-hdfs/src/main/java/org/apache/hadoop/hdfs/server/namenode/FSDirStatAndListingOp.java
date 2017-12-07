@@ -43,6 +43,8 @@ import org.apache.hadoop.hdfs.server.blockmanagement.BlockStoragePolicySuite;
 import org.apache.hadoop.hdfs.server.namenode.snapshot.DirectorySnapshottableFeature;
 import org.apache.hadoop.hdfs.server.namenode.snapshot.Snapshot;
 import org.apache.hadoop.hdfs.util.ReadOnlyList;
+import org.apache.hadoop.io.nativeio.NativeIO;
+import org.apache.hadoop.io.nativeio.NativeIOException;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -164,70 +166,117 @@ class FSDirStatAndListingOp {
    * @param needLocation if block locations are returned
    * @return a partial listing starting after startAfter
    */
-  private static DirectoryListing getListing(FSDirectory fsd, INodesInPath iip,
-      String src, byte[] startAfter, boolean needLocation, boolean isSuperUser)
-      throws IOException {
-    String srcs = FSDirectory.normalizePath(src);
-    final boolean isRawPath = FSDirectory.isReservedRawName(src);
+	private static DirectoryListing getListing(FSDirectory fsd, INodesInPath iip, String src, byte[] startAfter,
+			boolean needLocation, boolean isSuperUser) throws IOException {
+		String srcs = FSDirectory.normalizePath(src);
+		final boolean isRawPath = FSDirectory.isReservedRawName(src);
 
-    fsd.readLock();
-    try {
-      if (srcs.endsWith(HdfsConstants.SEPARATOR_DOT_SNAPSHOT_DIR)) {
-        return getSnapshotsListing(fsd, srcs, startAfter);
-      }
-      final int snapshot = iip.getPathSnapshotId();
-      final INode targetNode = iip.getLastINode();
-      if (targetNode == null)
-        return null;
-      byte parentStoragePolicy = isSuperUser ?
-          targetNode.getStoragePolicyID() : BlockStoragePolicySuite
-          .ID_UNSPECIFIED;
+		fsd.readLock();
+		try {
+			if (srcs.endsWith(HdfsConstants.SEPARATOR_DOT_SNAPSHOT_DIR)) {
+				return getSnapshotsListing(fsd, srcs, startAfter);
+			}
+			final int snapshot = iip.getPathSnapshotId();
+			final INode targetNode = iip.getLastINode();
+			if (targetNode == null)
+				return null;
+			byte parentStoragePolicy = isSuperUser ? targetNode.getStoragePolicyID()
+					: BlockStoragePolicySuite.ID_UNSPECIFIED;
 
-      if (!targetNode.isDirectory()) {
-        return new DirectoryListing(
-            new HdfsFileStatus[]{createFileStatus(fsd, src,
-                HdfsFileStatus.EMPTY_NAME, targetNode, needLocation,
-                parentStoragePolicy, snapshot, isRawPath, iip)}, 0);
-      }
+			if (!targetNode.isDirectory()) {
+				return new DirectoryListing(new HdfsFileStatus[] { createFileStatus(fsd, src, HdfsFileStatus.EMPTY_NAME,
+						targetNode, needLocation, parentStoragePolicy, snapshot, isRawPath, iip) }, 0);
+			}
 
-      final INodeDirectory dirInode = targetNode.asDirectory();
-      final ReadOnlyList<INode> contents = dirInode.getChildrenList(snapshot);
-      int startChild = INodeDirectory.nextChild(contents, startAfter);
-      int totalNumChildren = contents.size();
-      int numOfListing = Math.min(totalNumChildren - startChild,
-          fsd.getLsLimit());
-      int locationBudget = fsd.getLsLimit();
-      int listingCnt = 0;
-      HdfsFileStatus listing[] = new HdfsFileStatus[numOfListing];
-      for (int i=0; i<numOfListing && locationBudget>0; i++) {
-        INode cur = contents.get(startChild+i);
-        byte curPolicy = isSuperUser && !cur.isSymlink()?
-            cur.getLocalStoragePolicyID():
-            BlockStoragePolicySuite.ID_UNSPECIFIED;
-        listing[i] = createFileStatus(fsd, src, cur.getLocalNameBytes(), cur,
-            needLocation, getStoragePolicyID(curPolicy,
-                parentStoragePolicy), snapshot, isRawPath, iip);
-        listingCnt++;
-        if (needLocation) {
-            // Once we  hit lsLimit locations, stop.
-            // This helps to prevent excessively large response payloads.
-            // Approximate #locations with locatedBlockCount() * repl_factor
-            LocatedBlocks blks =
-                ((HdfsLocatedFileStatus)listing[i]).getBlockLocations();
-            locationBudget -= (blks == null) ? 0 :
-               blks.locatedBlockCount() * listing[i].getReplication();
-        }
-      }
-      // truncate return array if necessary
-      if (listingCnt < numOfListing) {
-          listing = Arrays.copyOf(listing, listingCnt);
-      }
-      return new DirectoryListing(
-          listing, totalNumChildren-startChild-listingCnt);
-    } finally {
-      fsd.readUnlock();
-    }
-  }
+			final INodeDirectory dirInode = targetNode.asDirectory();
+			final ReadOnlyList<INode> contents = dirInode.getChildrenList(snapshot);
+			int startChild = INodeDirectory.nextChild(contents, startAfter);
+			int totalNumChildren = contents.size();
+			int numOfListing = Math.min(totalNumChildren - startChild, fsd.getLsLimit());
+			int locationBudget = fsd.getLsLimit();
+			int listingCnt = 0;
+			HdfsFileStatus listing[];
+
+			if (fsd.nvram_enabled) {
+				int start, end, child_num;
+				int location = 0;
+				if (dirInode.getId() == INodeId.ROOT_INODE_ID) {
+					child_num = dirInode.child_num;
+					listing = new HdfsFileStatus[child_num];
+					start = dirInode.start;
+					end = dirInode.end;
+					if(end == 0 ) {
+						end = start;
+					}
+					//LOG.info("root = " + start + " -- " + end + " child_num = " + child_num);
+				} else {
+					location = fsd.NVramMap.get(dirInode.getLocalName());
+					child_num = NativeIO.readIntTest(FSDirectory.nvramAddress, location + 4092 - 4);
+					listing = new HdfsFileStatus[child_num];
+					start = NativeIO.readIntTest(FSDirectory.nvramAddress, location + 4092 - 8);
+					end = NativeIO.readIntTest(FSDirectory.nvramAddress, location + 4092 - 12);
+					if(end == 0 ) {
+						end = start;
+					}
+					//LOG.info("dir = " + dirInode.getLocalName()+ " start--end " + start + " -- " + end + " child_num = " + child_num);
+				}
+					for (int i = start; i <= end; i = i + 4096) {
+						// get strange child not parent
+						int parent_location = -1;
+						try {
+							parent_location = NativeIO.readIntTest(FSDirectory.nvramAddress, i);
+						} catch (NativeIOException e) {
+							LOG.info("NativeIOException occur");
+						}
+						if (location == parent_location) {
+							INode cur = dirInode.getChild(dirInode.getLocalNameBytes(), Snapshot.CURRENT_STATE_ID,
+									fsd.nvram_enabled, i);
+							if (cur != null) {
+//								LOG.info("file location = " + i + " start <==> end " + start + " " + end);
+//								LOG.info("parent_location = " + parent_location + " listingCnt " + listingCnt + " childname = "
+//							+ cur.getLocalName() + " directory name = " + dirInode.getLocalName() + " directory child_num = " + child_num );
+//								LOG.info(" directory name = " + dirInode.getLocalName());
+								byte curPolicy = isSuperUser && !cur.isSymlink() ? cur.getLocalStoragePolicyID()
+										: BlockStoragePolicySuite.ID_UNSPECIFIED;
+								listing[listingCnt] = createFileStatus(fsd, src, cur.getLocalNameBytes(), cur,
+										needLocation, getStoragePolicyID(curPolicy, parentStoragePolicy), snapshot,
+										isRawPath, iip);
+								listingCnt++;
+							}
+						}
+					}
+				return new DirectoryListing(listing, 0);
+				
+			} else {
+				listing = new HdfsFileStatus[numOfListing];
+				for (int i = 0; i < numOfListing && locationBudget > 0; i++) {
+					INode cur = contents.get(startChild + i);
+					byte curPolicy = isSuperUser && !cur.isSymlink() ? cur.getLocalStoragePolicyID()
+							: BlockStoragePolicySuite.ID_UNSPECIFIED;
+					listing[i] = createFileStatus(fsd, src, cur.getLocalNameBytes(), cur, needLocation,
+							getStoragePolicyID(curPolicy, parentStoragePolicy), snapshot, isRawPath, iip);
+					listingCnt++;
+					if (needLocation) {
+						// Once we hit lsLimit locations, stop.
+						// This helps to prevent excessively large response
+						// payloads.
+						// Approximate #locations with locatedBlockCount() *
+						// repl_factor
+						LocatedBlocks blks = ((HdfsLocatedFileStatus) listing[i]).getBlockLocations();
+						locationBudget -= (blks == null) ? 0 : blks.locatedBlockCount() * listing[i].getReplication();
+					}
+				}
+				// truncate return array if necessary
+				if (listingCnt < numOfListing) {
+					listing = Arrays.copyOf(listing, listingCnt);
+				}
+				return new DirectoryListing(listing, totalNumChildren - startChild - listingCnt);
+			}
+
+		} finally {
+			fsd.readUnlock();
+		}
+	}
 
   /**
    * Get a listing of all the snapshots of a snapshottable directory

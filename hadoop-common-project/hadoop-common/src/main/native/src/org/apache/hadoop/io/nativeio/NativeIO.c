@@ -1258,6 +1258,27 @@ cleanup:
 
 /* test for editLog JNI
  */
+
+JNIEXPORT jlong JNICALL
+Java_org_apache_hadoop_io_nativeio_NativeIO_ReturnNVRAMAddress(JNIEnv *env, jclass clazz, jlong size, jlong offset)
+{
+  P_STATUS status;
+  NVRAM_card_s card_list[1];
+  uint16_t card_list_count;
+  uint16_t card_total_count;
+  dev_handle_t dev_handle;
+  void * dmiBuffer;
+
+  status = PMC_NVRAM_card_list_get(card_list, 1, &card_list_count, &card_total_count);
+  status = PMC_NVRAM_init(card_list[0].card_uid, &dev_handle);
+
+  status = PMC_NVRAM_mem_map(dev_handle, size,
+		  NVRAM_MEM_MAP_FLAGS_DATA_WRITE | NVRAM_MEM_MAP_FLAGS_DATA_READ, (void **) &dmiBuffer, offset);
+
+  return (long)dmiBuffer;
+  //return directBuffer;
+}
+
 JNIEXPORT jobject JNICALL
 Java_org_apache_hadoop_io_nativeio_NativeIO_allocateNVRAMBuffer(JNIEnv *env, jclass clazz, jlong size, jlong offset)
 {
@@ -1281,6 +1302,82 @@ Java_org_apache_hadoop_io_nativeio_NativeIO_allocateNVRAMBuffer(JNIEnv *env, jcl
 }
 
 JNIEXPORT jint JNICALL
+Java_org_apache_hadoop_io_nativeio_NativeIO_putLongTest(JNIEnv * env, jclass clazz, jlong addr, jlong data, jint index)
+{
+	  void * dmiBuffer;
+	  dmiBuffer = (void *) addr;
+	  memcpy(dmiBuffer + index, &data, sizeof(data));
+
+	  return (index + sizeof(data));
+}
+
+JNIEXPORT jint JNICALL
+Java_org_apache_hadoop_io_nativeio_NativeIO_putIntTest(JNIEnv * env, jclass clazz, jlong addr, jint data, jint index)
+{
+	  void * dmiBuffer;
+	  dmiBuffer = (void *) addr;
+
+	  memcpy(dmiBuffer + index, &data, sizeof(data));
+	  return (index + sizeof(data));
+}
+
+JNIEXPORT jint JNICALL
+Java_org_apache_hadoop_io_nativeio_NativeIO_putBATest(JNIEnv * env, jclass clazz, jlong addr, jbyteArray data, jint index)
+{
+
+	  void * dmiBuffer;
+	  dmiBuffer = (void *) addr;
+
+	  //char ret[100] = {0, };
+	  char nativeStr[300] = {0, };
+	  int return_index = 300;
+
+	  int len = (*env)->GetArrayLength(env, data);
+	  jbyte * nativeBytes = (*env)->GetByteArrayElements(env, data, NULL);
+	  strncpy(nativeStr, (char *) nativeBytes , len);
+
+	  memcpy(dmiBuffer + index , nativeStr, sizeof(nativeStr));
+	  return index + return_index;
+}
+
+
+JNIEXPORT jint JNICALL
+Java_org_apache_hadoop_io_nativeio_NativeIO_readIntTest(JNIEnv * env, jclass clazz, jlong addr, jint index)
+{
+		  void * dmiBuffer;
+		  dmiBuffer = (void *) addr;
+		  int ret;
+		  memcpy(&ret , dmiBuffer + index, sizeof(int));
+		  return (jint) ret;
+}
+
+JNIEXPORT jlong JNICALL
+Java_org_apache_hadoop_io_nativeio_NativeIO_readLongTest(JNIEnv * env, jclass clazz, jlong addr, jint index)
+{
+	    void * dmiBuffer;
+		  dmiBuffer = (void *) addr;
+	    long ret;
+		  memcpy(&ret , dmiBuffer + index, sizeof(long));
+		  return (jlong) ret;
+}
+
+JNIEXPORT jbyteArray JNICALL
+Java_org_apache_hadoop_io_nativeio_NativeIO_readBATest(JNIEnv * env, jclass clazz, jlong addr, jint index, jint sizeArray)
+{
+		  void * dmiBuffer;
+		  dmiBuffer = (void *) addr;
+		  jbyteArray byteAR;
+		  int length;
+		  char ret[300] = {0, };
+		  memcpy(ret , dmiBuffer + index, sizeof(ret));
+		  length = (int) strlen(ret);
+		  byteAR = (*env)->NewByteArray(env, length);
+		  (*env)->SetByteArrayRegion(env, byteAR, 0, length, (jbyte *)ret);
+		  return byteAR;
+
+}
+
+JNIEXPORT jint JNICALL
 Java_org_apache_hadoop_io_nativeio_NativeIO_putLongToNVRAM(JNIEnv * env, jclass clazz, jlong size, jlong offset, jlong data, jint index)
 {
 	  P_STATUS status;
@@ -1289,7 +1386,7 @@ Java_org_apache_hadoop_io_nativeio_NativeIO_putLongToNVRAM(JNIEnv * env, jclass 
 	  uint16_t card_total_count;
 	  dev_handle_t dev_handle;
 	  void * dmiBuffer;
-//	  FILE * fp;
+	 // FILE * fp;
 
 	  status = PMC_NVRAM_card_list_get(card_list, 1, &card_list_count, &card_total_count);
 	  status = PMC_NVRAM_init(card_list[0].card_uid, &dev_handle);
@@ -1301,7 +1398,7 @@ Java_org_apache_hadoop_io_nativeio_NativeIO_putLongToNVRAM(JNIEnv * env, jclass 
 //	  fp = fopen("/home/skt_test/native_error_checking.txt","at");
 //	  fprintf(fp, "status check in putLongToNVRAM %d\n" , status);
 //	  fprintf(fp, "error message : %s\n", strerror(errno));
-
+//
 //	  fclose(fp);
 	  munmap(dmiBuffer, size);
 	  status = PMC_NVRAM_release(dev_handle);
@@ -1317,7 +1414,7 @@ Java_org_apache_hadoop_io_nativeio_NativeIO_putIntToNVRAM(JNIEnv * env, jclass c
 	  uint16_t card_total_count;
 	  dev_handle_t dev_handle;
 	  void * dmiBuffer;
-	  //FILE * fp = NULL;
+	 // FILE * fp = NULL;
 
 	  status = PMC_NVRAM_card_list_get(card_list, 1, &card_list_count, &card_total_count);
 	  status = PMC_NVRAM_init(card_list[0].card_uid, &dev_handle);
@@ -1329,7 +1426,7 @@ Java_org_apache_hadoop_io_nativeio_NativeIO_putIntToNVRAM(JNIEnv * env, jclass c
 //	  fp = fopen("/home/skt_test/native_error_checking.txt","at");
 //	  fprintf(fp, "status check in putIntToNVRAM %d\n" , status);
 //	  fprintf(fp, "error message : %s\n", strerror(errno));
-
+//
 //	  fclose(fp);
 	  munmap(dmiBuffer, size);
 	  status = PMC_NVRAM_release(dev_handle);
@@ -1345,11 +1442,11 @@ Java_org_apache_hadoop_io_nativeio_NativeIO_putBAToNVRAM(JNIEnv * env, jclass cl
 	  uint16_t card_total_count;
 	  dev_handle_t dev_handle;
 	  void * dmiBuffer;
-	  //FILE * fp;
+	 // FILE * fp;
 
-	  char ret[100] = {0, };
-	  char nativeStr[100] = {0, };
-	  int return_index = 100;
+	 // char ret[100] = {0, };
+	  char nativeStr[300] = {0, };
+	  int return_index = 300;
 
 	  int len = (*env)->GetArrayLength(env, data);
 	  jbyte * nativeBytes = (*env)->GetByteArrayElements(env, data, NULL);
@@ -1452,7 +1549,7 @@ Java_org_apache_hadoop_io_nativeio_NativeIO_readBAFromNVRAM(JNIEnv * env, jclass
 		  //FILE * fp;
 		  //int len = 18;
 		  //jstring teststring;
-		  char ret[100] = {0, };
+		  char ret[300] = {0, };
 
 		  status = PMC_NVRAM_card_list_get(card_list, 1, &card_list_count, &card_total_count);
 		  status = PMC_NVRAM_init(card_list[0].card_uid, &dev_handle);

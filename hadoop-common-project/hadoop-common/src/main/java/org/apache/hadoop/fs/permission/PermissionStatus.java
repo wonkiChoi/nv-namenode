@@ -108,12 +108,12 @@ public class PermissionStatus implements Writable {
 	  int new_pos = pos + 4;
 	  //username = new String(NativeIO.readBAFromNVRAM(4096, new_offset, new_pos, size));
 	  username = new String(NativeIO.readBATest(ptr, new_offset + new_pos, size));
-	  new_pos = new_pos + 100;
+	  new_pos = new_pos + 300;
 	  //size = NativeIO.readIntFromNVRAM(4096, new_offset, new_pos);
 	  size = NativeIO.readIntTest(ptr, new_offset + new_pos);
 	  new_pos = new_pos + 4;
 	  groupname = new String(NativeIO.readBATest(ptr, new_offset + new_pos, size));
-	  new_pos = new_pos + 100;
+	  new_pos = new_pos + 300;
 	  permission = FsPermission.read(new_offset, new_pos, ptr);
 	  new_pos = new_pos + 4;
 	  this.pos = new_pos;
