@@ -68,6 +68,8 @@ import org.apache.hadoop.hdfs.server.blockmanagement.DatanodeStorageInfo.AddBloc
 import org.apache.hadoop.hdfs.server.blockmanagement.PendingDataNodeMessages.ReportedBlockInfo;
 import org.apache.hadoop.hdfs.server.common.HdfsServerConstants.BlockUCState;
 import org.apache.hadoop.hdfs.server.common.HdfsServerConstants.ReplicaState;
+import org.apache.hadoop.hdfs.server.namenode.FSDirectory;
+import org.apache.hadoop.hdfs.server.namenode.INodeFile;
 import org.apache.hadoop.hdfs.server.namenode.NameNode;
 import org.apache.hadoop.hdfs.server.namenode.NameNode.OperationCategory;
 import org.apache.hadoop.hdfs.server.namenode.Namesystem;
@@ -636,23 +638,18 @@ public class BlockManager {
     if(lastBlock.isComplete())
       return false; // already completed (e.g. by syncBlock)
     
-    //LOG.info("commitBlock start");
     final boolean b = commitBlock(
         (BlockInfoContiguousUnderConstruction) lastBlock, commitBlock);
-   // LOG.info("commitBlock d");
  
     if(countNodes(lastBlock).liveReplicas() >= minReplication) {
-     //   LOG.info("commitBlock start");
     	completeBlock(bc, bc.numBlocks()-1, false);
-       // LOG.info("completeBlock done");
     }
 
     return b;
   }
-  
-  public boolean commitOrCompleteLastBlock(BlockCollection bc,
-	      Block commitBlock, boolean nvram_enabled) throws IOException {
-	    if(nvram_enabled) {
+ // BlockCollection bc
+  public boolean commitOrCompleteLastBlock(INodeFile file, BlockCollection bc,
+	      Block commitBlock, FSDirectory dir) throws IOException {
 	 	   if(commitBlock == null)
 	 	      return false; // not committing, this is a block allocation retry
 	 	    //BlockInfoContiguous lastBlock = bc.getLastBlock();
@@ -661,37 +658,14 @@ public class BlockManager {
 			      return false; // already completed (e.g. by syncBlock)
 	 	   if(lastBlock == null)
 	 	      return false; // no blocks in file yet
-	 	    
-	 	    final boolean b = commitBlock(
-	 	        (BlockInfoContiguousUnderConstruction) lastBlock, commitBlock);
+	 	     final boolean b = commitBlock((BlockInfoContiguousUnderConstruction) lastBlock, commitBlock);
+	       final boolean c = dir.rootDir.commitChild(file, bc, dir.nvram_enabled, dir);
 	 	 
 	 	    if(countNodes(lastBlock).liveReplicas() >= minReplication) {
 	 	    	completeBlock(bc, bc.numBlocks()-1, false);
 	 	    }
 
-	 	    return b;
-	    } else {
-	   if(commitBlock == null)
-	      return false; // not committing, this is a block allocation retry
-	    BlockInfoContiguous lastBlock = bc.getLastBlock();
-	    if(lastBlock == null)
-	      return false; // no blocks in file yet
-	    if(lastBlock.isComplete())
-	      return false; // already completed (e.g. by syncBlock)
-	    
-	    //LOG.info("commitBlock start");
-	    final boolean b = commitBlock(
-	        (BlockInfoContiguousUnderConstruction) lastBlock, commitBlock);
-	    //LOG.info("commitBlock d");
-	 
-	    if(countNodes(lastBlock).liveReplicas() >= minReplication) {
-	      //  LOG.info("commitBlock start");
-	    	completeBlock(bc, bc.numBlocks()-1, false);
-	       // LOG.info("completeBlock done");
-	    }
-
-	    return b;
-	    }
+	 	    return c;  
 	  }
   
 
@@ -712,6 +686,7 @@ public class BlockManager {
     BlockInfoContiguousUnderConstruction ucBlock =
         (BlockInfoContiguousUnderConstruction) curBlock;
     int numNodes = ucBlock.numNodes();
+    LOG.info("BlockState = " + ucBlock.getBlockUCState());
     if (!force && numNodes < minReplication)
       throw new IOException("Cannot complete block: " +
           "block does not satisfy minimal replication requirement.");

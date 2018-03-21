@@ -1675,7 +1675,7 @@ public class DFSOutputStream extends FSOutputSummer
           }
         }
       }
-      Preconditions.checkNotNull(stat, "HdfsFileStatus should not be null!");
+      Preconditions.checkNotNull(stat, "HdfsFileStatus should not be null!" + src);
       final DFSOutputStream out = new DFSOutputStream(dfsClient, src, stat,
           flag, progress, checksum, favoredNodes);
       out.start();

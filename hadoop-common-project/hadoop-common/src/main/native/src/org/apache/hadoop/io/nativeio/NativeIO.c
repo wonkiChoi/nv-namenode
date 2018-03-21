@@ -52,6 +52,7 @@
 #endif
 
 #include <fcntl.h>
+#include <x86intrin.h>
 #include "pmc_defines.h"
 #include "pmc_nvram_api_expo.h"
 #include "file_descriptor.h"
@@ -61,6 +62,8 @@
 #define MMAP_PROT_WRITE org_apache_hadoop_io_nativeio_NativeIO_POSIX_MMAP_PROT_WRITE
 #define MMAP_PROT_EXEC org_apache_hadoop_io_nativeio_NativeIO_POSIX_MMAP_PROT_EXEC
 
+#define NVM_GRAN 1610612736
+//#define NVM_GRAN 40960
 // the NativeIO$POSIX$Stat inner class and its constructor
 static jclass stat_clazz;
 static jmethodID stat_ctor;
@@ -90,6 +93,22 @@ static ssize_t get_pw_buflen();
  * Returns non-zero if the user has specified that the system
  * has non-threadsafe implementations of getpwuid_r or getgrgid_r.
  **/
+static void loadu_16bytes(void* dest, const void * src_in_pci) {
+	*((__m128i *)((char*)dest)) = _mm_loadu_si128((__m128i *)src_in_pci);
+}
+
+static void loadu_32bytes(void* dest, const void * src_in_pci) {
+	*((__m256i *)((char*)dest)) = _mm256_loadu_si256((__m256i *)src_in_pci);
+}
+
+static void storeu_16bytes(void* dest, const void * src_in_pci) {
+	_mm_storeu_si128((__m128i *)((char*)dest), *((__m128i *)((char*)src_in_pci)));
+}
+
+static void storeu_32bytes(void* dest, const void * src_in_pci) {
+	_mm256_storeu_si256((__m256i *)((char*)dest), *((__m256i *)((char*)src_in_pci)));
+}
+
 static int workaround_non_threadsafe_calls(JNIEnv *env, jclass clazz) {
   jboolean result;
   jfieldID needs_workaround_field = (*env)->GetStaticFieldID(
@@ -183,6 +202,41 @@ static void nioe_deinit(JNIEnv *env) {
   nioe_ctor = NULL;
 }
 
+static int addChildrenInDirectory(jlong* addr, jint directory_location,
+		jint target_offset, jint inodeNum) {
+	int commit = 1;
+	int success = 0;
+	int child_num;
+
+	int quo = directory_location / NVM_GRAN;
+	int cal_index = directory_location % NVM_GRAN;
+	void * dmiBuffer = (void *) addr[quo];
+	void * dmiBuffer_init = (void *) addr[0];
+	int inode_num = inodeNum;
+
+	memcpy(&child_num, dmiBuffer + cal_index + 4092 - 4, sizeof(child_num));
+	if (child_num == 1021) {
+		int next_dir;
+		memcpy(&next_dir, dmiBuffer + cal_index + 4092 - 8, sizeof(next_dir));
+		if (next_dir == 0) {
+		//	int inode_num;
+		//	memcpy(&inode_num, dmiBuffer_init, sizeof(inode_num));
+			inode_num = inode_num + 1;
+		//	memcpy(dmiBuffer_init, &inode_num, sizeof(inode_num));
+			next_dir = 4096 + 4096 * (inode_num - 1);
+			memcpy(dmiBuffer + cal_index + 4092 - 8, &next_dir, sizeof(next_dir));
+		}
+		return addChildrenInDirectory(addr, next_dir, target_offset, inode_num);
+	}
+	int next_location = 4 * child_num;
+	memcpy(dmiBuffer + cal_index + next_location, &target_offset, sizeof(target_offset));
+	child_num = child_num + 1;
+	memcpy(dmiBuffer + cal_index + 4092 - 4, &child_num, sizeof(child_num));
+	//memcpy(dmiBuffer + cal_index + 4092, &commit, sizeof(commit));
+
+	return inode_num;
+
+}
 /*
  * Compatibility mapping for fadvise flags. Return the proper value from fnctl.h.
  * If the value is not known, return the argument unchanged.
@@ -1279,54 +1333,335 @@ Java_org_apache_hadoop_io_nativeio_NativeIO_ReturnNVRAMAddress(JNIEnv *env, jcla
   //return directBuffer;
 }
 
-JNIEXPORT jobject JNICALL
-Java_org_apache_hadoop_io_nativeio_NativeIO_allocateNVRAMBuffer(JNIEnv *env, jclass clazz, jlong size, jlong offset)
-{
-  P_STATUS status;
-  NVRAM_card_s card_list[1];
-  uint16_t card_list_count;
-  uint16_t card_total_count;
-  dev_handle_t dev_handle;
-  void * dmiBuffer;
-
-  status = PMC_NVRAM_card_list_get(card_list, 1, &card_list_count, &card_total_count);
-  status = PMC_NVRAM_init(card_list[0].card_uid, &dev_handle);
-
-  status = PMC_NVRAM_mem_map(dev_handle, size,
-		  NVRAM_MEM_MAP_FLAGS_DATA_WRITE | NVRAM_MEM_MAP_FLAGS_DATA_READ, (void **) &dmiBuffer, offset);
-
-  jobject directBuffer = (*env)->NewDirectByteBuffer(env, dmiBuffer, size);
-  jobject globalRef = (*env)->NewGlobalRef(env, directBuffer);
-  return globalRef;
-  //return directBuffer;
-}
-
 JNIEXPORT jint JNICALL
-Java_org_apache_hadoop_io_nativeio_NativeIO_putLongTest(JNIEnv * env, jclass clazz, jlong addr, jlong data, jint index)
+Java_org_apache_hadoop_io_nativeio_NativeIO_putLongTest(JNIEnv * env, jclass clazz, jlongArray addr, jlong data, jint index)
 {
-	  void * dmiBuffer;
-	  dmiBuffer = (void *) addr;
-	  memcpy(dmiBuffer + index, &data, sizeof(data));
+//	  void * dmiBuffer;
+//	  dmiBuffer = (void *) addr;
+//		FILE * fp;
+//		fp = fopen("/home/skt_test/native_error_checking.txt", "at");
+	  jlong * nvram_addr = (*env)->GetLongArrayElements(env, addr, 0);
+	  int quo = index / NVM_GRAN;
+	  void * dmiBuffer = (void *) nvram_addr[quo];
+	  int cal_index = index % NVM_GRAN;
 
+//	  fprintf(fp, "success quo :%d\n" , quo);
+//	  fprintf(fp, "success cal_index :%d\n" , cal_index);
+//	  fprintf(fp, "success dmiBuffer :%ld\n" , nvram_addr[quo]);
+//	  fprintf(fp, "success data : %ld\n" , data);
+//	  fclose(fp);
+
+	  memcpy(dmiBuffer + cal_index, &data, sizeof(data));
+	  (*env)->ReleaseLongArrayElements(env, addr, nvram_addr, 0);
+	  /*test*/
 	  return (index + sizeof(data));
 }
 
 JNIEXPORT jint JNICALL
-Java_org_apache_hadoop_io_nativeio_NativeIO_putIntTest(JNIEnv * env, jclass clazz, jlong addr, jint data, jint index)
+Java_org_apache_hadoop_io_nativeio_NativeIO_putBlockTest(JNIEnv * env, jclass clazz,
+		jlongArray addr, jlong id, jlong genstamp, jint index)
 {
-	  void * dmiBuffer;
-	  dmiBuffer = (void *) addr;
+//	  void * dmiBuffer;
+//	  dmiBuffer = (void *) addr;
+	  jlong * nvram_addr = (*env)->GetLongArrayElements(env, addr, 0);
+	  int quo = index / NVM_GRAN;
+	  int cal_index = index % NVM_GRAN;
+	  void * dmiBuffer = (void *) nvram_addr[quo];
 
-	  memcpy(dmiBuffer + index, &data, sizeof(data));
+	  memcpy(dmiBuffer + cal_index, &id, sizeof(id));
+	  //memcpy(dmiBuffer + cal_index + sizeof(id), &numbyte, sizeof(numbyte));
+	  memcpy(dmiBuffer + cal_index + sizeof(id) + 8, &genstamp, sizeof(genstamp));
+
+	  (*env)->ReleaseLongArrayElements(env, addr, nvram_addr, 0);
+	  /*test*/
+	  return (index + sizeof(id) + 8 + sizeof(genstamp));
+}
+
+JNIEXPORT jint JNICALL
+Java_org_apache_hadoop_io_nativeio_NativeIO_putBlockChunkTest(JNIEnv * env, jclass clazz,
+		jlongArray addr, jbyteArray block, jint index)
+{
+//	  void * dmiBuffer;
+//	  dmiBuffer = (void *) addr;
+	  jlong * nvram_addr = (*env)->GetLongArrayElements(env, addr, 0);
+	  int quo = index / NVM_GRAN;
+	  int cal_index = index % NVM_GRAN;
+	  void * dmiBuffer = (void *) nvram_addr[quo];
+
+		int remains = 24;
+	  //int len = (*env)->GetArrayLength(env, meta);
+	  jbyte * nativeBytes = (*env)->GetByteArrayElements(env, block, NULL);
+
+		char * dest = (char *)( dmiBuffer + cal_index );
+		char * src = (char *) nativeBytes;
+
+		while(remains >= 16) {
+			storeu_16bytes((void *)dest , (void *)src);
+			dest += 16;
+			src += 16;
+			remains-= 16;
+		}
+		if(remains !=0) {
+			memcpy(dest, src, remains);
+		}
+		(*env)->ReleaseByteArrayElements(env, block, nativeBytes, 0);
+		(*env)->ReleaseLongArrayElements(env, addr, nvram_addr, 0);
+	  return (index + 24);
+}
+
+JNIEXPORT jint JNICALL
+Java_org_apache_hadoop_io_nativeio_NativeIO_putChildrenInDirectory(JNIEnv * env, jclass clazz, jlongArray addr, jint target_offset,
+		 jint directory_location, jlong inodeNum)
+{
+//	  void * dmiBuffer;
+//	  dmiBuffer = (void *) addr;
+	  jlong * nvram_addr = (*env)->GetLongArrayElements(env, addr, 0);
+	  int quo = directory_location / NVM_GRAN;
+	  int cal_directory_location = directory_location % NVM_GRAN;
+
+	  void * dmiBuffer = (void *) nvram_addr[quo];
+	  void * dmiBuffer_init = (void *) nvram_addr[0];
+	  int child_num;
+
+		int next_dir;
+		int success = 1;
+		int inode_num = inodeNum;
+
+	  memcpy(&child_num, dmiBuffer + cal_directory_location + 4092 - 4  , sizeof(child_num));
+		if (child_num == 787) {
+			memcpy(&next_dir, dmiBuffer + cal_directory_location + 4092 - 8 , sizeof(next_dir));
+			if (next_dir == 0) {
+				//int inode_num = 0;
+				//memcpy(&inode_num, dmiBuffer_init, sizeof(inode_num));
+				inode_num = inode_num + 1;
+				//memcpy(dmiBuffer_init, &inode_num, sizeof(inode_num));
+				next_dir = 4096 + 4096 * (inode_num - 1);
+				memcpy(dmiBuffer + cal_directory_location + 4092 - 8, &next_dir, sizeof(next_dir));
+			}
+			inode_num = addChildrenInDirectory(nvram_addr, next_dir, target_offset, inode_num);
+		} else {
+			int next_location = 4 * (child_num);
+			memcpy(dmiBuffer + cal_directory_location + 936 + next_location , &target_offset, sizeof(target_offset));
+			child_num = child_num + 1;
+			memcpy(dmiBuffer + cal_directory_location + 4092 - 4 , &child_num, sizeof(child_num));
+		}
+		(*env)->ReleaseLongArrayElements(env, addr, nvram_addr, 0);
+	  return inode_num;
+}
+
+JNIEXPORT jint JNICALL
+Java_org_apache_hadoop_io_nativeio_NativeIO_putLongLongTest(JNIEnv * env, jclass clazz, jlongArray addr, jlong id,
+		 jlong rep,  jlong mod,  jlong access,  jlong prefer, jint index)
+{
+//	  void * dmiBuffer;
+//	  dmiBuffer = (void *) addr;
+//	FILE * fp;
+//	fp = fopen("/home/skt_test/native_error_checking.txt", "at");
+	  jlong * nvram_addr = (*env)->GetLongArrayElements(env, addr, 0);
+	  int quo = index / NVM_GRAN;
+	  int cal_index = index % NVM_GRAN;
+	  void * dmiBuffer = (void *) nvram_addr[quo];
+
+//	  fprintf(fp, "success quo :%d\n" , quo);
+//	  fprintf(fp, "success cal_index :%d\n" , cal_index);
+//	  fprintf(fp, "success dmiBuffer :%ld\n" , nvram_addr[quo]);
+//	  fprintf(fp, "success data : %ld -- %ld -- %ld -- %ld -- %ld\n" , id, rep, mod, access, prefer);
+//	  fclose(fp);
+	  memcpy(dmiBuffer + cal_index, &id, sizeof(id));
+	  memcpy(dmiBuffer + cal_index + sizeof(id), &rep, sizeof(rep));
+	  memcpy(dmiBuffer + cal_index + sizeof(id) + sizeof(rep), &mod, sizeof(mod));
+	  memcpy(dmiBuffer + cal_index + sizeof(id) + sizeof(rep) + sizeof(mod), &access, sizeof(access));
+	  memcpy(dmiBuffer + cal_index + sizeof(id) + sizeof(rep) + sizeof(mod) + sizeof(access), &prefer, sizeof(prefer));
+
+		(*env)->ReleaseLongArrayElements(env, addr, nvram_addr, 0);
+		  /*test*/
+	  return (index + sizeof(id) + sizeof(rep) + sizeof(mod) + sizeof(access) + sizeof(prefer));
+}
+
+JNIEXPORT jint JNICALL
+Java_org_apache_hadoop_io_nativeio_NativeIO_putmetaTest(JNIEnv * env, jclass clazz, jlongArray addr, jlongArray meta, jint index)
+{
+//	  void * dmiBuffer;
+//	  dmiBuffer = (void *) addr;
+//	FILE * fp;
+//	fp = fopen("/home/skt_test/native_error_checking.txt", "at");
+	  jlong * nvram_addr = (*env)->GetLongArrayElements(env, addr, 0);
+	  int quo = index / NVM_GRAN;
+	  int cal_index = index % NVM_GRAN;
+	  void * dmiBuffer = (void *) nvram_addr[quo];
+
+		int remains = 40;
+	  //int len = (*env)->GetArrayLength(env, meta);
+	  jlong * nativeBytes = (*env)->GetLongArrayElements(env, meta, NULL);
+
+		char * dest = (char *)( dmiBuffer + cal_index );
+		char * src = (char *) nativeBytes;
+
+		while(remains >= 16) {
+			storeu_16bytes((void *)dest , (void *)src);
+			dest += 16;
+			src += 16;
+			remains -= 16;
+		}
+		if(remains !=0) {
+			memcpy(dest, src, remains);
+		}
+		(*env)->ReleaseLongArrayElements(env, meta, nativeBytes, 0);
+		(*env)->ReleaseLongArrayElements(env, addr, nvram_addr, 0);
+
+	  return (index + 40);
+}
+
+JNIEXPORT jint JNICALL
+Java_org_apache_hadoop_io_nativeio_NativeIO_putIntTest(JNIEnv * env, jclass clazz, jlongArray addr, jint data, jint index)
+{
+//	FILE * fp;
+//	fp = fopen("/home/skt_test/native_error_checking.txt", "at");
+	  jlong * nvram_addr = (*env)->GetLongArrayElements(env, addr, 0);
+	  int quo = index / NVM_GRAN;
+	  int cal_index = index % NVM_GRAN;
+	  void * dmiBuffer = (void *) nvram_addr[quo];
+
+	  memcpy(dmiBuffer + cal_index, &data, sizeof(data));
+		(*env)->ReleaseLongArrayElements(env, addr, nvram_addr, 0);
+		  /*test*/
 	  return (index + sizeof(data));
 }
 
 JNIEXPORT jint JNICALL
-Java_org_apache_hadoop_io_nativeio_NativeIO_putBATest(JNIEnv * env, jclass clazz, jlong addr, jbyteArray data, jint index)
+Java_org_apache_hadoop_io_nativeio_NativeIO_putIntBATest(JNIEnv * env, jclass clazz, jlongArray addr, jint length, jbyteArray data, jint index)
+{
+//	FILE * fp;
+//	fp = fopen("/home/skt_test/native_error_checking.txt", "at");
+	  jlong * nvram_addr = (*env)->GetLongArrayElements(env, addr, 0);
+	  int quo = index / NVM_GRAN;
+	  int cal_index = index % NVM_GRAN;
+	  void * dmiBuffer = (void *) nvram_addr[quo];
+
+//	  fprintf(fp, "putIntBATest quo :%d\n" , quo);
+//	  fprintf(fp, "putIntBATest cal_index :%d\n" , cal_index);
+//	  fprintf(fp, "putIntBATest dmiBuffer :%ld\n" , nvram_addr[quo]);
+//	  fclose(fp);
+	  char nativeStr[200] = {0, };
+	  int return_index = 300;
+		int remains = 200;
+	  int len = (*env)->GetArrayLength(env, data);
+	  jbyte * nativeBytes = (*env)->GetByteArrayElements(env, data, NULL);
+
+		char * dest = (char *)(dmiBuffer + cal_index + sizeof(length));
+	  memcpy(nativeStr, (char *) nativeBytes, len);
+
+		char * src = (char *) nativeStr;
+	  memcpy(dmiBuffer + cal_index, &length, sizeof(length));
+
+//		while(remains >= 32) {
+//			storeu_32bytes((void *)dest , (void *)src);
+//			dest += 32;
+//			src += 32;
+//			remains-=32;
+//		}
+//
+		while(remains >= 16) {
+			storeu_16bytes((void *)dest , (void *)src);
+			dest += 16;
+			src += 16;
+			remains -= 16;
+		}
+		if(remains !=0) {
+			memcpy(dest, src, remains);
+		}
+	  //memcpy(dmiBuffer + cal_index + sizeof(length) , nativeStr, sizeof(nativeStr));
+		(*env)->ReleaseLongArrayElements(env, addr, nvram_addr, 0);
+		  /*test*/
+	  return (index + sizeof(length) + return_index);
+}
+
+JNIEXPORT jint JNICALL
+Java_org_apache_hadoop_io_nativeio_NativeIO_putIntClientTest(JNIEnv * env, jclass clazz, jlongArray addr, jint length, jbyteArray data, jint index)
+{
+//	FILE * fp;
+//	fp = fopen("/home/skt_test/native_error_checking.txt", "at");
+	  jlong * nvram_addr = (*env)->GetLongArrayElements(env, addr, 0);
+	  int quo = index / NVM_GRAN;
+	  int cal_index = index % NVM_GRAN;
+	  void * dmiBuffer = (void *) nvram_addr[quo];
+
+//	  fprintf(fp, "putIntBATest quo :%d\n" , quo);
+//	  fprintf(fp, "putIntBATest cal_index :%d\n" , cal_index);
+//	  fprintf(fp, "putIntBATest dmiBuffer :%ld\n" , nvram_addr[quo]);
+//	  fclose(fp);
+	  char nativeStr[64] = {0, };
+	  int return_index = 300;
+		int remains = 64;
+	  int len = (*env)->GetArrayLength(env, data);
+	  jbyte * nativeBytes = (*env)->GetByteArrayElements(env, data, NULL);
+
+		char * dest = (char *)(dmiBuffer + cal_index + sizeof(length));
+	  memcpy(nativeStr, (char *) nativeBytes, len);
+
+		char * src = (char *) nativeStr;
+	  memcpy(dmiBuffer + cal_index, &length, sizeof(length));
+
+//		while(remains >= 32) {
+//			storeu_32bytes((void *)dest , (void *)src);
+//			dest += 32;
+//			src += 32;
+//			remains-=32;
+//		}
+//
+		while(remains >= 16) {
+			storeu_16bytes((void *)dest , (void *)src);
+			dest += 16;
+			src += 16;
+			remains-= 16;
+		}
+		if(remains !=0) {
+			memcpy(dest, src, remains);
+		}
+		(*env)->ReleaseLongArrayElements(env, addr, nvram_addr, 0);
+		  /*test*/
+	  return (index + sizeof(length) + return_index);
+}
+
+JNIEXPORT jint JNICALL
+Java_org_apache_hadoop_io_nativeio_NativeIO_putIntPermTest(JNIEnv * env, jclass clazz, jlongArray addr, jint length, jbyteArray data, jint index)
+{
+//	FILE * fp;
+//	fp = fopen("/home/skt_test/native_error_checking.txt", "at");
+	  jlong * nvram_addr = (*env)->GetLongArrayElements(env, addr, 0);
+	  int quo = index / NVM_GRAN;
+	  int cal_index = index % NVM_GRAN;
+	  void * dmiBuffer = (void *) nvram_addr[quo];
+
+//	  fprintf(fp, "putIntBATest quo :%d\n" , quo);
+//	  fprintf(fp, "putIntBATest cal_index :%d\n" , cal_index);
+//	  fprintf(fp, "putIntBATest dmiBuffer :%ld\n" , nvram_addr[quo]);
+//	  fclose(fp);
+	  char nativeStr[16] = {0, };
+	  int return_index = 300;
+		int remains = 16;
+	  int len = (*env)->GetArrayLength(env, data);
+	  jbyte * nativeBytes = (*env)->GetByteArrayElements(env, data, NULL);
+
+		char * dest = (char *)(dmiBuffer + cal_index + sizeof(length));
+	  memcpy(nativeStr, (char *) nativeBytes, len);
+
+		char * src = (char *) nativeStr;
+	  memcpy(dmiBuffer + cal_index, &length, sizeof(length));
+
+  	storeu_16bytes((void *)dest , (void *)src);
+		(*env)->ReleaseLongArrayElements(env, addr, nvram_addr, 0);
+	  return (index + sizeof(length) + return_index);
+}
+
+JNIEXPORT jint JNICALL
+Java_org_apache_hadoop_io_nativeio_NativeIO_putBATest(JNIEnv * env, jclass clazz, jlongArray addr, jbyteArray data, jint index)
 {
 
-	  void * dmiBuffer;
-	  dmiBuffer = (void *) addr;
+	  jlong * nvram_addr = (*env)->GetLongArrayElements(env, addr, 0);
+	  int quo = index / NVM_GRAN;
+	  int cal_index = index % NVM_GRAN;
+	  void * dmiBuffer = (void *) nvram_addr[quo];
 
 	  //char ret[100] = {0, };
 	  char nativeStr[300] = {0, };
@@ -1336,241 +1671,288 @@ Java_org_apache_hadoop_io_nativeio_NativeIO_putBATest(JNIEnv * env, jclass clazz
 	  jbyte * nativeBytes = (*env)->GetByteArrayElements(env, data, NULL);
 	  strncpy(nativeStr, (char *) nativeBytes , len);
 
-	  memcpy(dmiBuffer + index , nativeStr, sizeof(nativeStr));
+	  memcpy(dmiBuffer + cal_index , nativeStr, sizeof(nativeStr));
+		(*env)->ReleaseLongArrayElements(env, addr, nvram_addr, 0);
+		  /*test*/
 	  return index + return_index;
 }
 
 
 JNIEXPORT jint JNICALL
-Java_org_apache_hadoop_io_nativeio_NativeIO_readIntTest(JNIEnv * env, jclass clazz, jlong addr, jint index)
+Java_org_apache_hadoop_io_nativeio_NativeIO_readIntTest(JNIEnv * env, jclass clazz, jlongArray addr, jint index)
 {
-		  void * dmiBuffer;
-		  dmiBuffer = (void *) addr;
-		  int ret;
-		  memcpy(&ret , dmiBuffer + index, sizeof(int));
-		  return (jint) ret;
+//	FILE * fp;
+//	fp = fopen("/home/skt_test/native_error_checking.txt", "at");
+//	fprintf(fp, "success1\n");
+
+	jlong * nvram_addr = (*env)->GetLongArrayElements(env, addr, 0);
+	int quo = index / NVM_GRAN;
+	int cal_index = index % NVM_GRAN;
+	void * dmiBuffer = (void *) nvram_addr[quo];
+	int ret;
+//	fprintf(fp, "success2 quo :%d\n" , quo);
+//	fprintf(fp, "success2 cal_index :%d\n" , cal_index);
+//	fprintf(fp, "success2 dmiBuffer :%ld\n" , nvram_addr[quo]);
+
+
+
+	memcpy(&ret, dmiBuffer + cal_index, sizeof(int));
+//	fprintf(fp, "success3\n");
+	(*env)->ReleaseLongArrayElements(env, addr, nvram_addr, 0);
+//	fclose(fp);
+	return (jint) ret;
 }
 
 JNIEXPORT jlong JNICALL
-Java_org_apache_hadoop_io_nativeio_NativeIO_readLongTest(JNIEnv * env, jclass clazz, jlong addr, jint index)
+Java_org_apache_hadoop_io_nativeio_NativeIO_readLongTest(JNIEnv * env, jclass clazz, jlongArray addr, jint index)
 {
-	    void * dmiBuffer;
-		  dmiBuffer = (void *) addr;
-	    long ret;
-		  memcpy(&ret , dmiBuffer + index, sizeof(long));
-		  return (jlong) ret;
+	jlong * nvram_addr = (*env)->GetLongArrayElements(env, addr, 0);
+	int quo = index / NVM_GRAN;
+	int cal_index = index % NVM_GRAN;
+	void * dmiBuffer = (void *) nvram_addr[quo];
+	long ret;
+
+	memcpy(&ret, dmiBuffer + cal_index, sizeof(long));
+	(*env)->ReleaseLongArrayElements(env, addr, nvram_addr, 0);
+	return (jlong) ret;
+}
+
+JNIEXPORT jintArray JNICALL
+Java_org_apache_hadoop_io_nativeio_NativeIO_readIntArr(JNIEnv * env, 	jclass clazz, jlongArray addr, jint index, jint type)
+{
+	  jlong * nvram_addr = (*env)->GetLongArrayElements(env, addr, 0);
+	  int quo = index / NVM_GRAN;
+	  int cal_index = index % NVM_GRAN;
+	  void * dmiBuffer = (void *) nvram_addr[quo];
+
+	  jintArray intAR;
+	  int child_num = 0;
+	  int i = 0;
+	  int record_location = 0;
+	  int mem = 0;
+	  int total_num = 0;
+
+	  jint loc[1024];
+//	FILE * fp;
+//  fp = fopen("/home/skt_test/native_error_checking.txt","at");
+//  fprintf(fp, " offset = %d and type = %d\n", index, type);
+
+	memcpy(&child_num, dmiBuffer + cal_index + 4092 - 4, sizeof(child_num));
+	if (type == 0) { // first page
+		for (i = 0; i < child_num; i++) {
+			record_location = 4 * i;
+			memcpy(&mem, dmiBuffer + cal_index + 936 + record_location, sizeof(mem));
+			loc[total_num] = mem;
+			total_num++;
+		}
+	} else {
+		for (i = 0; i < child_num; i++) {
+			record_location = 4 * i;
+			memcpy(&mem, dmiBuffer + cal_index + record_location, sizeof(mem));
+			loc[total_num] = mem;
+			total_num++;
+		}
+	}
+	intAR = (*env)->NewIntArray(env, total_num);
+	(*env)->SetIntArrayRegion(env, intAR, 0, total_num, loc);
+	(*env)->ReleaseLongArrayElements(env, addr, nvram_addr, 0);
+	//fclose(fp);
+	return intAR;
 }
 
 JNIEXPORT jbyteArray JNICALL
-Java_org_apache_hadoop_io_nativeio_NativeIO_readBATest(JNIEnv * env, jclass clazz, jlong addr, jint index, jint sizeArray)
-{
-		  void * dmiBuffer;
-		  dmiBuffer = (void *) addr;
-		  jbyteArray byteAR;
-		  int length;
-		  char ret[300] = {0, };
-		  memcpy(ret , dmiBuffer + index, sizeof(ret));
-		  length = (int) strlen(ret);
-		  byteAR = (*env)->NewByteArray(env, length);
-		  (*env)->SetByteArrayRegion(env, byteAR, 0, length, (jbyte *)ret);
-		  return byteAR;
+Java_org_apache_hadoop_io_nativeio_NativeIO_readBATest(JNIEnv * env,
+		jclass clazz, jlongArray addr, jint index, jint sizeArray) {
+	jlong * nvram_addr = (*env)->GetLongArrayElements(env, addr, 0);
+	int quo = index / NVM_GRAN;
+	int cal_index = index % NVM_GRAN;
+	void * dmiBuffer = (void *) nvram_addr[quo];
 
-}
+	jbyteArray byteAR;
+	int length;
+	char ret[200] = {0, };
+	memcpy(ret, dmiBuffer + cal_index, sizeof(ret));
+	length = (int) strlen(ret);
 
-JNIEXPORT jint JNICALL
-Java_org_apache_hadoop_io_nativeio_NativeIO_putLongToNVRAM(JNIEnv * env, jclass clazz, jlong size, jlong offset, jlong data, jint index)
-{
-	  P_STATUS status;
-	  NVRAM_card_s card_list[1];
-	  uint16_t card_list_count;
-	  uint16_t card_total_count;
-	  dev_handle_t dev_handle;
-	  void * dmiBuffer;
-	 // FILE * fp;
+	byteAR = (*env)->NewByteArray(env, length);
+	(*env)->SetByteArrayRegion(env, byteAR, 0, length, (jbyte *) ret);
 
-	  status = PMC_NVRAM_card_list_get(card_list, 1, &card_list_count, &card_total_count);
-	  status = PMC_NVRAM_init(card_list[0].card_uid, &dev_handle);
-
-	  status = PMC_NVRAM_mem_map(dev_handle, size,
-			  NVRAM_MEM_MAP_FLAGS_DATA_WRITE | NVRAM_MEM_MAP_FLAGS_DATA_READ, (void **) &dmiBuffer, offset);
-	  memcpy(dmiBuffer + index, &data, sizeof(data));
-
-//	  fp = fopen("/home/skt_test/native_error_checking.txt","at");
-//	  fprintf(fp, "status check in putLongToNVRAM %d\n" , status);
-//	  fprintf(fp, "error message : %s\n", strerror(errno));
-//
-//	  fclose(fp);
-	  munmap(dmiBuffer, size);
-	  status = PMC_NVRAM_release(dev_handle);
-	  return (index + sizeof(data));
-}
-
-JNIEXPORT jint JNICALL
-Java_org_apache_hadoop_io_nativeio_NativeIO_putIntToNVRAM(JNIEnv * env, jclass clazz, jlong size, jlong offset, jint data, jint index)
-{
-	  P_STATUS status;
-	  NVRAM_card_s card_list[1];
-	  uint16_t card_list_count;
-	  uint16_t card_total_count;
-	  dev_handle_t dev_handle;
-	  void * dmiBuffer;
-	 // FILE * fp = NULL;
-
-	  status = PMC_NVRAM_card_list_get(card_list, 1, &card_list_count, &card_total_count);
-	  status = PMC_NVRAM_init(card_list[0].card_uid, &dev_handle);
-
-	  status = PMC_NVRAM_mem_map(dev_handle, size,
-			  NVRAM_MEM_MAP_FLAGS_DATA_WRITE | NVRAM_MEM_MAP_FLAGS_DATA_READ, (void **) &dmiBuffer, offset);
-	  memcpy(dmiBuffer + index, &data, sizeof(data));
-
-//	  fp = fopen("/home/skt_test/native_error_checking.txt","at");
-//	  fprintf(fp, "status check in putIntToNVRAM %d\n" , status);
-//	  fprintf(fp, "error message : %s\n", strerror(errno));
-//
-//	  fclose(fp);
-	  munmap(dmiBuffer, size);
-	  status = PMC_NVRAM_release(dev_handle);
-	  return (index + sizeof(data));
-}
-
-JNIEXPORT jint JNICALL
-Java_org_apache_hadoop_io_nativeio_NativeIO_putBAToNVRAM(JNIEnv * env, jclass clazz, jlong size, jlong offset, jbyteArray data, jint index)
-{
-	  P_STATUS status;
-	  NVRAM_card_s card_list[1];
-	  uint16_t card_list_count;
-	  uint16_t card_total_count;
-	  dev_handle_t dev_handle;
-	  void * dmiBuffer;
-	 // FILE * fp;
-
-	 // char ret[100] = {0, };
-	  char nativeStr[300] = {0, };
-	  int return_index = 300;
-
-	  int len = (*env)->GetArrayLength(env, data);
-	  jbyte * nativeBytes = (*env)->GetByteArrayElements(env, data, NULL);
-	  strncpy(nativeStr, (char *) nativeBytes , len);
-
-	  status = PMC_NVRAM_card_list_get(card_list, 1, &card_list_count, &card_total_count);
-	  status = PMC_NVRAM_init(card_list[0].card_uid, &dev_handle);
-
-	  status = PMC_NVRAM_mem_map(dev_handle, size,
-			  NVRAM_MEM_MAP_FLAGS_DATA_WRITE | NVRAM_MEM_MAP_FLAGS_DATA_READ, (void **) &dmiBuffer, offset);
-
-	  memcpy(dmiBuffer + index , nativeStr, sizeof(nativeStr));
-	  //(*env)->ReleaseStringUTFChars(env, data, nativeStr);
-	  //ret = (char *)malloc(sizeof(ret));
-	  //memcpy(ret, dmiBuffer + index , sizeof(ret));
-
-
-//	  fp = fopen("/home/skt_test/native_error_checking.txt","at");
-//	  fprintf(fp, "status check in putBAToNVRAM %d\n" , status);
-//	  fprintf(fp, "error message : %s\n", strerror(errno));
-//
-//	  fclose(fp);
-	  munmap(dmiBuffer, size);
-	  status = PMC_NVRAM_release(dev_handle);
-	  return index + return_index;
-}
-
-JNIEXPORT jint JNICALL
-Java_org_apache_hadoop_io_nativeio_NativeIO_readIntFromNVRAM(JNIEnv * env, jclass clazz, jlong size, jlong offset, jint index)
-{
-	  P_STATUS status;
-		  NVRAM_card_s card_list[1];
-		  uint16_t card_list_count;
-		  uint16_t card_total_count;
-		  dev_handle_t dev_handle;
-		  void * dmiBuffer;
-		  int ret;
-		  //FILE * fp;
-
-		  status = PMC_NVRAM_card_list_get(card_list, 1, &card_list_count, &card_total_count);
-		  status = PMC_NVRAM_init(card_list[0].card_uid, &dev_handle);
-
-		  status = PMC_NVRAM_mem_map(dev_handle, size,
-				  NVRAM_MEM_MAP_FLAGS_DATA_WRITE | NVRAM_MEM_MAP_FLAGS_DATA_READ, (void **) &dmiBuffer, offset);
-		  memcpy(&ret , dmiBuffer + index, sizeof(int));
-
-//
 //		  fp = fopen("/home/skt_test/native_error_checking.txt","at");
-//		  fprintf(fp, "status check in readIntToNVRAM %d\n" , status);
-//		  fprintf(fp, "error message : %s\n", strerror(errno));
+//		  fprintf(fp, "nativeStr read : %s and length : %d\n", ret, length);
+//		  fprintf(fp, "nativeBytes read : %s and length : %d\n", (char *)byteAR, strlen(byteAR));
 //
 //		  fclose(fp);
-		  munmap(dmiBuffer, size);
-		  status = PMC_NVRAM_release(dev_handle);
-		  return (jint) ret;
+	(*env)->ReleaseLongArrayElements(env, addr, nvram_addr, 0);
+	return byteAR;
 }
 
-JNIEXPORT jlong JNICALL
-Java_org_apache_hadoop_io_nativeio_NativeIO_readLongFromNVRAM(JNIEnv * env, jclass clazz, jlong size, jlong offset, jint index)
-{
-	    P_STATUS status;
-		  NVRAM_card_s card_list[1];
-		  uint16_t card_list_count;
-		  uint16_t card_total_count;
-		  dev_handle_t dev_handle;
-		  void * dmiBuffer;
-		  long ret;
-		  //FILE *fp;
+JNIEXPORT jlongArray JNICALL
+Java_org_apache_hadoop_io_nativeio_NativeIO_readmetaTest(JNIEnv * env,
+		jclass clazz, jlongArray addr, jint index) {
+	jlong * nvram_addr = (*env)->GetLongArrayElements(env, addr, 0);
+	int quo = index / NVM_GRAN;
+	int cal_index = index % NVM_GRAN;
+	void * dmiBuffer = (void *) nvram_addr[quo];
 
-		  status = PMC_NVRAM_card_list_get(card_list, 1, &card_list_count, &card_total_count);
-		  status = PMC_NVRAM_init(card_list[0].card_uid, &dev_handle);
+	jlongArray longAR;
+	char ret[40] = {0, };
+	char * dest = ret;
+	char * src = (char *)(dmiBuffer + cal_index);
+	int remains = 40;
 
-		  status = PMC_NVRAM_mem_map(dev_handle, size,
-				  NVRAM_MEM_MAP_FLAGS_DATA_WRITE | NVRAM_MEM_MAP_FLAGS_DATA_READ, (void **) &dmiBuffer, offset);
-		  memcpy(&ret , dmiBuffer + index, sizeof(long));
+	while(remains >= 16) {
+		loadu_16bytes((void *)dest , (void *)src);
+		dest += 16;
+		src += 16;
+		remains -= 16;
+	}
+	if(remains !=0) {
+		memcpy(dest, src, remains);
+	}
 
-//
-//		  fp = fopen("/home/skt_test/native_error_checking.txt","at");
-//		  fprintf(fp, "status check in readLongToNVRAM %d\n" , status);
-//		  fprintf(fp, "error message : %s\n", strerror(errno));
-//
-//		  fclose(fp);
-		  munmap(dmiBuffer, size);
-		  status = PMC_NVRAM_release(dev_handle);
-		  return (jlong) ret;
+	longAR = (*env)->NewLongArray(env, 40);
+	(*env)->SetLongArrayRegion(env, longAR, 0, 40, (jbyte *) ret);
+
+	(*env)->ReleaseLongArrayElements(env, addr, nvram_addr, 0);
+	return longAR;
 }
 
 JNIEXPORT jbyteArray JNICALL
-Java_org_apache_hadoop_io_nativeio_NativeIO_readBAFromNVRAM(JNIEnv * env, jclass clazz, jlong size, jlong offset, jint index, jint sizeArray)
+Java_org_apache_hadoop_io_nativeio_NativeIO_readBlockChunkTest(JNIEnv * env,
+		jclass clazz, jlongArray addr, jint index) {
+	jlong * nvram_addr = (*env)->GetLongArrayElements(env, addr, 0);
+	int quo = index / NVM_GRAN;
+	int cal_index = index % NVM_GRAN;
+	void * dmiBuffer = (void *) nvram_addr[quo];
+
+	jbyteArray byteAR;
+	char ret[24] = {0, };
+	char * dest = ret;
+	char * src = (char *)(dmiBuffer + cal_index);
+	int remains = 24;
+
+	while(remains >= 16) {
+		loadu_16bytes((void *)dest , (void *)src);
+		dest += 16;
+		src += 16;
+		remains -= 16;
+	}
+	if(remains !=0) {
+		memcpy(dest, src, remains);
+	}
+
+	byteAR = (*env)->NewByteArray(env, 24);
+	(*env)->SetByteArrayRegion(env, byteAR, 0, 24, (jbyte *) ret);
+
+	(*env)->ReleaseLongArrayElements(env, addr, nvram_addr, 0);
+	return byteAR;
+}
+
+JNIEXPORT jbyteArray JNICALL
+Java_org_apache_hadoop_io_nativeio_NativeIO_readIntBATest(JNIEnv * env, jclass clazz, jlongArray addr, jint index)
 {
-	    P_STATUS status;
-		  NVRAM_card_s card_list[1];
-		  uint16_t card_list_count;
-		  uint16_t card_total_count;
-		  dev_handle_t dev_handle;
-		  void * dmiBuffer;
-		  //jbyte * ret = NULL;
-		  jbyteArray byteAR;
-		  int length;
-		  //FILE * fp;
-		  //int len = 18;
-		  //jstring teststring;
-		  char ret[300] = {0, };
+	jlong * nvram_addr = (*env)->GetLongArrayElements(env, addr, 0);
+	int quo = index / NVM_GRAN;
+	int cal_index = index % NVM_GRAN;
+	void * dmiBuffer = (void *) nvram_addr[quo];
+	jbyteArray byteAR;
+	int length;
+	char ret[200] = {0, };
+//	FILE * fp;
 
-		  status = PMC_NVRAM_card_list_get(card_list, 1, &card_list_count, &card_total_count);
-		  status = PMC_NVRAM_init(card_list[0].card_uid, &dev_handle);
+	int remains = 200;
+	char * dest = ret;
+	char * src = (char *)(dmiBuffer + cal_index + sizeof(length));
+	memcpy(&length, dmiBuffer + cal_index, sizeof(length));
 
-		  status = PMC_NVRAM_mem_map(dev_handle, size,
-				  NVRAM_MEM_MAP_FLAGS_DATA_WRITE | NVRAM_MEM_MAP_FLAGS_DATA_READ, (void **) &dmiBuffer, offset);
-
-		  memcpy(ret , dmiBuffer + index, sizeof(ret));
-		  length = (int) strlen(ret);
-		  byteAR = (*env)->NewByteArray(env, length);
-		  (*env)->SetByteArrayRegion(env, byteAR, 0, length, (jbyte *)ret);
-
-//		  fp = fopen("/home/skt_test/native_error_checking.txt","at");
-//		  fprintf(fp, "status check in readBAToNVRAM %d\n" , status);
-//		  fprintf(fp, "error message : %s\n", strerror(errno));
+//  fp = fopen("/home/skt_test/native_error_checking.txt","at");
+//  fprintf(fp, "1");
 //
-//		  fclose(fp);
-		  munmap(dmiBuffer, size);
-		  status = PMC_NVRAM_release(dev_handle);
-		  return byteAR;
+//	while(remains >= 32) {
+//		fprintf(fp, "2");
+//		loadu_32bytes((void *)dest , (void *)src);
+//		fprintf(fp, "3");
+//		dest += 32;
+//		fprintf(fp, "4");
+//		src += 32;
+//		fprintf(fp, "5");
+//		remains -= 32;
+//	}
+//	fprintf(fp, "6");
 
+	while(remains >= 16) {
+		loadu_16bytes((void *)dest , (void *)src);
+		dest += 16;
+		src += 16;
+		remains -= 16;
+	}
+	if(remains !=0) {
+		memcpy(dest, src, remains);
+	}
+	//memcpy(ret, dmiBuffer + cal_index + sizeof(length), sizeof(ret));
+	byteAR = (*env)->NewByteArray(env, length);
+	(*env)->SetByteArrayRegion(env, byteAR, 0, length, (jbyte *) ret);
+
+	(*env)->ReleaseLongArrayElements(env, addr, nvram_addr, 0);
+//  fclose(fp);
+	return byteAR;
+}
+
+
+JNIEXPORT jbyteArray JNICALL
+Java_org_apache_hadoop_io_nativeio_NativeIO_readIntClientTest(JNIEnv * env, jclass clazz, jlongArray addr, jint index)
+{
+	jlong * nvram_addr = (*env)->GetLongArrayElements(env, addr, 0);
+	int quo = index / NVM_GRAN;
+	int cal_index = index % NVM_GRAN;
+	void * dmiBuffer = (void *) nvram_addr[quo];
+	jbyteArray byteAR;
+	int length;
+	char ret[64] = {0, };
+	int remains = 64;
+	char * dest = ret;
+	char * src = (char *)(dmiBuffer + cal_index + sizeof(length));
+	memcpy(&length, dmiBuffer + cal_index, sizeof(length));
+
+	while(remains >= 16) {
+		loadu_16bytes((void *)dest , (void *)src);
+		dest += 16;
+		src += 16;
+		remains -= 16;
+	}
+	if(remains !=0) {
+		memcpy(dest, src, remains);
+	}
+	byteAR = (*env)->NewByteArray(env, length);
+	(*env)->SetByteArrayRegion(env, byteAR, 0, length, (jbyte *) ret);
+
+	(*env)->ReleaseLongArrayElements(env, addr, nvram_addr, 0);
+	return byteAR;
+}
+
+JNIEXPORT jbyteArray JNICALL
+Java_org_apache_hadoop_io_nativeio_NativeIO_readIntPermTest(JNIEnv * env, jclass clazz, jlongArray addr, jint index)
+{
+	jlong * nvram_addr = (*env)->GetLongArrayElements(env, addr, 0);
+	int quo = index / NVM_GRAN;
+	int cal_index = index % NVM_GRAN;
+	void * dmiBuffer = (void *) nvram_addr[quo];
+	jbyteArray byteAR;
+	int length;
+	char ret[16] = {0, };
+
+	int remains = 16;
+	char * dest = ret;
+	char * src = (char *)(dmiBuffer + cal_index + sizeof(length));
+	memcpy(&length, dmiBuffer + cal_index, sizeof(length));
+
+	loadu_16bytes((void *)dest , (void *)src);
+
+	byteAR = (*env)->NewByteArray(env, length);
+	(*env)->SetByteArrayRegion(env, byteAR, 0, length, (jbyte *) ret);
+
+	(*env)->ReleaseLongArrayElements(env, addr, nvram_addr, 0);
+	return byteAR;
 }
 
 JNIEXPORT void JNICALL
@@ -1584,27 +1966,6 @@ Java_org_apache_hadoop_io_nativeio_NativeIO_clFlushFunction(JNIEnv *env, jclass 
 }
 
 
-JNIEXPORT void JNICALL
-Java_org_apache_hadoop_io_nativeio_NativeIO_freeNVRAMBuffer(JNIEnv* env, jclass clazz, jobject buf)
-{
-	void * buffer = (*env)->GetDirectBufferAddress(env, buf);
-	unmap(buffer);
-}
-
-JNIEXPORT void JNICALL
-Java_org_apache_hadoop_io_nativeio_NativeIO_addChildren(JNIEnv *env, jclass clazz, jobject buf, jlong id, jbyteArray name, jlong permission, jlong modificationTime, jlong accessTime)
-{
-
-	char * byteInode = (*env)->GetDirectBufferAddress(env,buf);
-
-} 
-
-JNIEXPORT void JNICALL
-Java_org_apache_hadoop_io_nativeio_NativeIO_searchINode(JNIEnv *env, jclass clazz, jobject buf, jlong id, jbyteArray name)
-{
-	char *  byteInode = (*env)->GetDirectBufferAddress(env, buf);
-
-}
 
 
 /**

@@ -102,7 +102,8 @@ static enum PermissionStatusFormat {
   private long modificationTime = 0L;
   /** The last access time*/
   private long accessTime = 0L;
-
+	int nvram_location;
+	
   /** For implementing {@link LinkedElement}. */
   private LinkedElement next = null;
   /** An array {@link Feature}s. */

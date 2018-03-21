@@ -27,6 +27,7 @@ import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
 import java.nio.MappedByteBuffer;
 import java.nio.channels.FileChannel;
+import java.util.ArrayList;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -973,40 +974,53 @@ public class NativeIO {
 
 	public static native long ReturnNVRAMAddress(long size, long offset) throws NativeIOException;
 
-	public static native ByteBuffer allocateNVRAMBuffer(long size, long offset) throws NativeIOException;
+	public static native int putLongTest(long[] addr, long data, int index) throws NativeIOException;
 	
-	public static native int putLongTest(long addr, long data, int index) throws NativeIOException;
+	public static native int putBlockTest(long[] addr, long id, long genstamp, int index) throws NativeIOException;
+
+	public static native int putBlockChunkTest(long[] addr, byte[] block, int index) throws NativeIOException;
 	
-	public static native int putIntTest(long addr, int data, int index) throws NativeIOException;
+	public static native int putChildrenInDirectory(long[] addr, int target_offset, int directory_location, long inodeNum) throws NativeIOException;
+	
+	public static native int putLongLongTest(long[] addr, long id, long rep, long mod,
+			long access, long prefer, int index) throws NativeIOException;
+	
+	public static native int putmetaTest(long[] addr, long[] meta, int index) throws NativeIOException;
+	
+	public static native int putIntTest(long[] addr, int data, int index) throws NativeIOException;
 
-	public static native int putBATest(long addr, byte[] data, int index) throws NativeIOException;
+	public static native int putIntBATest(long[] addr, int length, byte[] data, int index) throws NativeIOException;
+	
+	public static native int putIntClientTest(long[] addr, int length, byte[] data, int index) throws NativeIOException;
+	
+	public static native int putIntPermTest(long[] addr, int length, byte[] data, int index) throws NativeIOException;
+	
+	public static native int putBATest(long[] addr, byte[] data, int index) throws NativeIOException;
 
-	public static native int readIntTest(long addr, int index) throws NativeIOException;
+	public static native int readIntTest(long[] addr, int index) throws NativeIOException;
 
-	public static native long readLongTest(long addr, int index) throws NativeIOException;
+	public static native long readLongTest(long[] addr, int index) throws NativeIOException;
+	
+	public static native int[] readIntArr(long[] addr, int index, int type) throws NativeIOException;
 
-	public static native byte[] readBATest(long addr, int index, int arraysize)
+	public static native byte[] readBATest(long[] addr, int index, int arraysize)
+			throws NativeIOException;
+	
+	public static native long[] readmetaTest(long[] addr, int index)
+			throws NativeIOException;
+	
+	public static native byte[] readBlockChunkTest(long[] addr, int index)
 			throws NativeIOException;
 
-	public static native int putLongToNVRAM(long size, long offset, long data, int index) throws NativeIOException;
-
-	public static native int putIntToNVRAM(long size, long offset, int data, int index) throws NativeIOException;
-
-	public static native int putBAToNVRAM(long size, long offset, byte[] data, int index) throws NativeIOException;
-
-	public static native int readIntFromNVRAM(long size, long offset, int index) throws NativeIOException;
-
-	public static native long readLongFromNVRAM(long size, long offset, int index) throws NativeIOException;
-
-	public static native byte[] readBAFromNVRAM(long size, long offset, int index, int arraysize)
+	public static native byte[] readIntBATest(long[] addr, int index)
 			throws NativeIOException;
-
+	
+	public static native byte[] readIntClientTest(long[] addr, int index)
+			throws NativeIOException;
+	
+	public static native byte[] readIntPermTest(long[] addr, int index)
+			throws NativeIOException;
+	
 	public static native void clFlushFunction(ByteBuffer target, long size) throws NativeIOException;
 
-	public static native void freeNVRAMBuffer(ByteBuffer buf) throws NativeIOException;
-
-	public static native void addChildren(ByteBuffer Inode, long id, byte[] name, long permission,
-			long modificationTime, long accessTime) throws NativeIOException;
-
-	public static native void searchINode(ByteBuffer Inode, long id, byte[] name) throws NativeIOException;
 }

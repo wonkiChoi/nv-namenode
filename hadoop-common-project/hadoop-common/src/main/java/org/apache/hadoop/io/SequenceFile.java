@@ -1129,10 +1129,10 @@ public class SequenceFile {
           }
 
           out = fs.append(p, bufferSize, progress);
-          this.appendMode = true;
+          this.appendMode = true;          
         } else {
           out = fs
-              .create(p, true, bufferSize, replication, blockSize, progress);
+              .create(p, true, bufferSize, replication, blockSize, progress);         
         }
       } else {
         out = streamOption.getValue();

@@ -232,7 +232,7 @@ public class TestDFSIO implements Tool {
     long tStart = System.currentTimeMillis();
     bench.writeTest(fs);
     long execTime = System.currentTimeMillis() - tStart;
-    bench.analyzeResult(fs, TestType.TEST_TYPE_WRITE, execTime);
+    bench.analyzeResult(fs, TestType.TEST_TYPE_WRITE, execTime, "no");
   }
 
   @Test (timeout = 3000)
@@ -241,7 +241,7 @@ public class TestDFSIO implements Tool {
     long tStart = System.currentTimeMillis();
     bench.readTest(fs);
     long execTime = System.currentTimeMillis() - tStart;
-    bench.analyzeResult(fs, TestType.TEST_TYPE_READ, execTime);
+    bench.analyzeResult(fs, TestType.TEST_TYPE_READ, execTime, "no");
   }
 
   @Test (timeout = 3000)
@@ -251,7 +251,7 @@ public class TestDFSIO implements Tool {
     bench.getConf().setLong("test.io.skip.size", 0);
     bench.randomReadTest(fs);
     long execTime = System.currentTimeMillis() - tStart;
-    bench.analyzeResult(fs, TestType.TEST_TYPE_READ_RANDOM, execTime);
+    bench.analyzeResult(fs, TestType.TEST_TYPE_READ_RANDOM, execTime, "no");
   }
 
   @Test (timeout = 3000)
@@ -261,7 +261,7 @@ public class TestDFSIO implements Tool {
     bench.getConf().setLong("test.io.skip.size", -DEFAULT_BUFFER_SIZE);
     bench.randomReadTest(fs);
     long execTime = System.currentTimeMillis() - tStart;
-    bench.analyzeResult(fs, TestType.TEST_TYPE_READ_BACKWARD, execTime);
+    bench.analyzeResult(fs, TestType.TEST_TYPE_READ_BACKWARD, execTime, "no");
   }
 
   @Test (timeout = 3000)
@@ -271,7 +271,7 @@ public class TestDFSIO implements Tool {
     bench.getConf().setLong("test.io.skip.size", 1);
     bench.randomReadTest(fs);
     long execTime = System.currentTimeMillis() - tStart;
-    bench.analyzeResult(fs, TestType.TEST_TYPE_READ_SKIP, execTime);
+    bench.analyzeResult(fs, TestType.TEST_TYPE_READ_SKIP, execTime, "no");
   }
 
   @Test (timeout = 6000)
@@ -280,7 +280,7 @@ public class TestDFSIO implements Tool {
     long tStart = System.currentTimeMillis();
     bench.appendTest(fs);
     long execTime = System.currentTimeMillis() - tStart;
-    bench.analyzeResult(fs, TestType.TEST_TYPE_APPEND, execTime);
+    bench.analyzeResult(fs, TestType.TEST_TYPE_APPEND, execTime, "no");
   }
 
   @Test (timeout = 60000)
@@ -290,7 +290,7 @@ public class TestDFSIO implements Tool {
     long tStart = System.currentTimeMillis();
     bench.truncateTest(fs);
     long execTime = System.currentTimeMillis() - tStart;
-    bench.analyzeResult(fs, TestType.TEST_TYPE_TRUNCATE, execTime);
+    bench.analyzeResult(fs, TestType.TEST_TYPE_TRUNCATE, execTime, "no");
   }
 
   @SuppressWarnings("deprecation")
@@ -307,6 +307,7 @@ public class TestDFSIO implements Tool {
       String name = getFileName(i);
       Path controlFile = new Path(controlDir, "in_file_" + name);
       SequenceFile.Writer writer = null;
+
       try {
         writer = SequenceFile.createWriter(fs, config, controlFile,
                                            Text.class, LongWritable.class,
@@ -733,6 +734,7 @@ public class TestDFSIO implements Tool {
     long skipSize = 0;
     String resFileName = DEFAULT_RES_FILE_NAME;
     String compressionClass = null;
+    String nvram_or_not = "no";
     boolean isSequential = false;
     String version = TestDFSIO.class.getSimpleName() + ".1.8";
 
@@ -758,29 +760,31 @@ public class TestDFSIO implements Tool {
       } else if (args[i].equals("-skip")) {
         if(testType != TestType.TEST_TYPE_READ) return -1;
         testType = TestType.TEST_TYPE_READ_SKIP;
-      } else if (args[i].equalsIgnoreCase("-truncate")) {
-        testType = TestType.TEST_TYPE_TRUNCATE;
-      } else if (args[i].equals("-clean")) {
-        testType = TestType.TEST_TYPE_CLEANUP;
-      } else if (args[i].startsWith("-seq")) {
-        isSequential = true;
-      } else if (args[i].startsWith("-compression")) {
-        compressionClass = args[++i];
-      } else if (args[i].equals("-nrFiles")) {
-        nrFiles = Integer.parseInt(args[++i]);
-      } else if (args[i].equals("-fileSize") || args[i].equals("-size")) {
-        nrBytes = parseSize(args[++i]);
-      } else if (args[i].equals("-skipSize")) {
-        skipSize = parseSize(args[++i]);
-      } else if (args[i].equals("-bufferSize")) {
-        bufferSize = Integer.parseInt(args[++i]);
-      } else if (args[i].equals("-resFile")) {
-        resFileName = args[++i];
-      } else {
-        System.err.println("Illegal argument: " + args[i]);
-        return -1;
-      }
-    }
+			} else if (args[i].equalsIgnoreCase("-truncate")) {
+				testType = TestType.TEST_TYPE_TRUNCATE;
+			} else if (args[i].equals("-clean")) {
+				testType = TestType.TEST_TYPE_CLEANUP;
+			} else if (args[i].startsWith("-seq")) {
+				isSequential = true;
+			} else if (args[i].startsWith("-compression")) {
+				compressionClass = args[++i];
+			} else if (args[i].equals("-nrFiles")) {
+				nrFiles = Integer.parseInt(args[++i]);
+			} else if (args[i].equals("-fileSize") || args[i].equals("-size")) {
+				nrBytes = parseSize(args[++i]);
+			} else if (args[i].equals("-skipSize")) {
+				skipSize = parseSize(args[++i]);
+			} else if (args[i].equals("-bufferSize")) {
+				bufferSize = Integer.parseInt(args[++i]);
+			} else if (args[i].equals("-resFile")) {
+				resFileName = args[++i];
+			} else if (args[i].equals("-nvram")) {
+				nvram_or_not = args[++i];
+			} else {
+				System.err.println("Illegal argument: " + args[i]);
+				return -1;
+			}
+		}
     if(testType == null)
       return -1;
     if(testType == TestType.TEST_TYPE_READ_BACKWARD)
@@ -817,7 +821,11 @@ public class TestDFSIO implements Tool {
       cleanup(fs);
       return 0;
     }
+    long cStart = System.currentTimeMillis();
     createControlFile(fs, nrBytes, nrFiles);
+    long cExecTime = System.currentTimeMillis() - cStart;
+    LOG.info("createControlFile ExecTime = " + cExecTime);
+    
     long tStart = System.currentTimeMillis();
     switch(testType) {
     case TEST_TYPE_WRITE:
@@ -841,7 +849,7 @@ public class TestDFSIO implements Tool {
     }
     long execTime = System.currentTimeMillis() - tStart;
   
-    analyzeResult(fs, testType, execTime, resFileName);
+    analyzeResult(fs, testType, execTime, resFileName, nvram_or_not, cExecTime);
     return 0;
   }
 
@@ -873,10 +881,69 @@ public class TestDFSIO implements Tool {
     return ((float)bytes)/MEGA;
   }
 
+	private void analyzeResult(FileSystem fs, TestType testType, long execTime, String resFileName, String nvram_or_not)
+			throws IOException {
+		Path reduceFile = getReduceFilePath(testType);
+		long tasks = 0;
+		long size = 0;
+		long time = 0;
+		float rate = 0;
+		float sqrate = 0;
+		DataInputStream in = null;
+		BufferedReader lines = null;
+		try {
+			in = new DataInputStream(fs.open(reduceFile));
+			lines = new BufferedReader(new InputStreamReader(in));
+			String line;
+			while ((line = lines.readLine()) != null) {
+				StringTokenizer tokens = new StringTokenizer(line, " \t\n\r\f%");
+				String attr = tokens.nextToken();
+				if (attr.endsWith(":tasks"))
+					tasks = Long.parseLong(tokens.nextToken());
+				else if (attr.endsWith(":size"))
+					size = Long.parseLong(tokens.nextToken());
+				else if (attr.endsWith(":time"))
+					time = Long.parseLong(tokens.nextToken());
+				else if (attr.endsWith(":rate"))
+					rate = Float.parseFloat(tokens.nextToken());
+				else if (attr.endsWith(":sqrate"))
+					sqrate = Float.parseFloat(tokens.nextToken());
+			}
+		} finally {
+			if (in != null)
+				in.close();
+			if (lines != null)
+				lines.close();
+		}
+
+		double med = rate / 1000 / tasks;
+		double stdDev = Math.sqrt(Math.abs(sqrate / 1000 / tasks - med * med));
+		String resultLines[] = { "----- TestDFSIO ----- : " + testType,
+				"           Date & time: " + new Date(System.currentTimeMillis()), "       Number of files: " + tasks,
+				"Total MBytes processed: " + toMB(size), "     Throughput mb/sec: " + size * 1000.0 / (time * MEGA),
+				"Average IO rate mb/sec: " + med, " IO rate std deviation: " + stdDev,
+				"    Test exec time sec: " + (float) execTime / 1000, "    NVRAM : " + nvram_or_not,
+				"" };
+
+		PrintStream res = null;
+		try {
+			res = new PrintStream(new FileOutputStream(new File(resFileName), true));
+			for (int i = 0; i < resultLines.length; i++) {
+				LOG.info(resultLines[i]);
+				res.println(resultLines[i]);
+			}
+		} finally {
+			if (res != null)
+				res.close();
+		}
+	}
+  
   private void analyzeResult( FileSystem fs,
                               TestType testType,
                               long execTime,
-                              String resFileName
+                              String resFileName,
+                              String nvram_or_not,
+                              long cExecTime
                             ) throws IOException {
     Path reduceFile = getReduceFilePath(testType);
     long tasks = 0;
@@ -920,6 +987,8 @@ public class TestDFSIO implements Tool {
       "Average IO rate mb/sec: " + med,
       " IO rate std deviation: " + stdDev,
       "    Test exec time sec: " + (float)execTime / 1000,
+      "    NVRAM : " + nvram_or_not,
+      "    cExecTime : " + (float)cExecTime / 1000,
       "" };
 
     PrintStream res = null;
@@ -953,10 +1022,10 @@ public class TestDFSIO implements Tool {
     return null;
   }
 
-  private void analyzeResult(FileSystem fs, TestType testType, long execTime)
+  private void analyzeResult(FileSystem fs, TestType testType, long execTime, String nvram_or_not)
       throws IOException {
     String dir = System.getProperty("test.build.dir", "target/test-dir");
-    analyzeResult(fs, testType, execTime, dir + "/" + DEFAULT_RES_FILE_NAME);
+    analyzeResult(fs, testType, execTime, dir + "/" + DEFAULT_RES_FILE_NAME, nvram_or_not);
   }
 
   private void cleanup(FileSystem fs)

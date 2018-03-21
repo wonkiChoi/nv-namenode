@@ -22,6 +22,7 @@ import java.io.DataOutput;
 import java.io.IOException;
 import java.nio.Buffer;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -154,7 +155,7 @@ public class FsPermission implements Writable {
 	    fromShort((short)in.getInt());
 	  }
   
-  public void readFields(int new_offset, int pos, long ptr) throws IOException {
+  public void readFields(int new_offset, int pos, long[] ptr) throws IOException {
 	    //fromShort((short)NativeIO.readIntFromNVRAM(4096, new_offset, pos));
 	  fromShort((short)NativeIO.readIntTest(ptr, new_offset + pos));
 	  }
@@ -174,7 +175,7 @@ public class FsPermission implements Writable {
 	    return p;
 	  }
   
-  public static FsPermission read(int new_offset, int pos, long ptr) throws IOException {
+  public static FsPermission read(int new_offset, int pos, long[] ptr) throws IOException {
 	    FsPermission p = new FsPermission();
 	    p.readFields(new_offset, pos, ptr);
 	    return p;

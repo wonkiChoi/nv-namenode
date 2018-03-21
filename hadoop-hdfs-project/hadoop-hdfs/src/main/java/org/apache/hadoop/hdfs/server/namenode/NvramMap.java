@@ -17,9 +17,13 @@
  */
 package org.apache.hadoop.hdfs.server.namenode;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+import org.apache.commons.logging.impl.Log4JLogger;
 
 import org.apache.hadoop.fs.permission.FsPermission;
 import org.apache.hadoop.fs.permission.PermissionStatus;
@@ -34,20 +38,22 @@ import com.google.common.base.Preconditions;
  * and INode.  
  */
 public class NvramMap {
-  
+	static final Log LOG = LogFactory.getLog(NvramMap.class);
   static NvramMap newInstance(INodeDirectory rootDir) {
     // Compute the map capacity by allocating 1% of total memory
-    int capacity = LightWeightGSet.computeCapacity(20, "NvramMap");
-    HashMap<String, Integer> map = new HashMap<>(capacity);
-    map.put(rootDir.getLocalName(), (int)0);
+    int capacity = LightWeightGSet.computeCapacity(1, "NvramMap");
+    HashMap<String, ArrayList<Integer>> map = new HashMap<>(capacity);
+    ArrayList<Integer> l = new ArrayList<Integer>();
+    l.add(0);
+    map.put(rootDir.getLocalName(), l);
     return new NvramMap(map);
   }
   
   /** Synchronized by external lock. */
   //private final GSet<INode, INodeWithAdditionalFields> map;
-  private final HashMap<String, Integer> map;
+  private final HashMap<String, ArrayList<Integer>> map;
 
-  private NvramMap(HashMap<String, Integer> map) {
+  private NvramMap(HashMap<String, ArrayList<Integer>> map) {
     Preconditions.checkArgument(map != null);
     this.map = map;
   }
@@ -58,16 +64,37 @@ public class NvramMap {
    * @param inode The {@link INode} to be added to the map.
    */
   public final void put(String name, int location) {
-      map.put(name, location);
+
+	  if(map.containsKey(name)) {
+		  map.get(name).add(location); 
+		  //LOG.info("second nvram put = "+ name + " location = " + location);
+	  } else {
+		  ArrayList<Integer> temp = new ArrayList<Integer>();
+		  temp.add(location);
+		 // LOG.info("first nvram put = "+ name + " location = " + location);
+		  map.put(name, temp);
+	  }
   }
   
   /**
    * Remove a {@link INode} from the map.
    * @param inode The {@link INode} to be removed.
    */
-  public final void remove(INode inode) {
-    map.remove(inode.getLocalName());
-  }
+	public final void remove(String name, int location) {
+//		LOG.info("nvram remove = "+ name + " location = " + location);
+		for(int i=0; i< map.get(name).size(); i++) {
+			if(map.get(name).get(i) == location) {
+			//	LOG.info("remove at " + map.get(name).get(i));
+				map.get(name).remove(i);
+				break;
+			}
+		}
+
+		if (map.get(name).isEmpty()) {
+			//LOG.info("called at " + name);
+			map.remove(name);
+		}
+	}
   
   /**
    * @return The size of the map.
@@ -82,11 +109,11 @@ public class NvramMap {
    * @return The {@link INode} in the map with the given id. Return null if no 
    *         such {@link INode} in the map.
    */
-	public int get(String name) {
+	public ArrayList<Integer> get(String name) {
 		if (map.containsKey(name)) {
 			return map.get(name);
 		} else {
-			return -1;
+			return null;
 		}
 	}
 	

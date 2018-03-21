@@ -216,78 +216,76 @@ public abstract class FileInputFormat<K, V> implements InputFormat<K, V> {
     if (jobFilter != null) {
       filters.add(jobFilter);
     }
-    PathFilter inputFilter = new MultiPathFilter(filters);
+		PathFilter inputFilter = new MultiPathFilter(filters);
 
-    FileStatus[] result;
-    int numThreads = job
-        .getInt(
-            org.apache.hadoop.mapreduce.lib.input.FileInputFormat.LIST_STATUS_NUM_THREADS,
-            org.apache.hadoop.mapreduce.lib.input.FileInputFormat.DEFAULT_LIST_STATUS_NUM_THREADS);
-    
-    StopWatch sw = new StopWatch().start();
-    if (numThreads == 1) {
-      List<FileStatus> locatedFiles = singleThreadedListStatus(job, dirs, inputFilter, recursive); 
-      result = locatedFiles.toArray(new FileStatus[locatedFiles.size()]);
-    } else {
-      Iterable<FileStatus> locatedFiles = null;
-      try {
-        
-        LocatedFileStatusFetcher locatedFileStatusFetcher = new LocatedFileStatusFetcher(
-            job, dirs, recursive, inputFilter, false);
-        locatedFiles = locatedFileStatusFetcher.getFileStatuses();
-      } catch (InterruptedException e) {
-        throw new IOException("Interrupted while getting file statuses");
-      }
-      result = Iterables.toArray(locatedFiles, FileStatus.class);
-    }
+		FileStatus[] result;
+		int numThreads = job.getInt(org.apache.hadoop.mapreduce.lib.input.FileInputFormat.LIST_STATUS_NUM_THREADS,
+				org.apache.hadoop.mapreduce.lib.input.FileInputFormat.DEFAULT_LIST_STATUS_NUM_THREADS);
+
+		StopWatch sw = new StopWatch().start();
+		if (numThreads == 1) {
+			List<FileStatus> locatedFiles = singleThreadedListStatus(job, dirs, inputFilter, recursive);
+			result = locatedFiles.toArray(new FileStatus[locatedFiles.size()]);
+		} else {
+			Iterable<FileStatus> locatedFiles = null;
+			try {
+
+				LocatedFileStatusFetcher locatedFileStatusFetcher = new LocatedFileStatusFetcher(job, dirs, recursive,
+						inputFilter, false);
+				locatedFiles = locatedFileStatusFetcher.getFileStatuses();
+			} catch (InterruptedException e) {
+				throw new IOException("Interrupted while getting file statuses");
+			}
+			result = Iterables.toArray(locatedFiles, FileStatus.class);
+		}
 
     sw.stop();
     if (LOG.isDebugEnabled()) {
       LOG.debug("Time taken to get FileStatuses: "
           + sw.now(TimeUnit.MILLISECONDS));
     }
+    LOG.info("Time taken to get FileStatuses: "
+            + sw.now(TimeUnit.MILLISECONDS));
     LOG.info("Total input paths to process : " + result.length);
     return result;
   }
   
-  private List<FileStatus> singleThreadedListStatus(JobConf job, Path[] dirs,
-      PathFilter inputFilter, boolean recursive) throws IOException {
-    List<FileStatus> result = new ArrayList<FileStatus>();
-    List<IOException> errors = new ArrayList<IOException>();
-    for (Path p: dirs) {
-      FileSystem fs = p.getFileSystem(job); 
-      FileStatus[] matches = fs.globStatus(p, inputFilter);
-      if (matches == null) {
-        errors.add(new IOException("Input path does not exist: " + p));
-      } else if (matches.length == 0) {
-        errors.add(new IOException("Input Pattern " + p + " matches 0 files"));
-      } else {
-        for (FileStatus globStat: matches) {
-          if (globStat.isDirectory()) {
-            RemoteIterator<LocatedFileStatus> iter =
-                fs.listLocatedStatus(globStat.getPath());
-            while (iter.hasNext()) {
-              LocatedFileStatus stat = iter.next();
-              if (inputFilter.accept(stat.getPath())) {
-                if (recursive && stat.isDirectory()) {
-                  addInputPathRecursively(result, fs, stat.getPath(),
-                      inputFilter);
-                } else {
-                  result.add(stat);
-                }
-              }
-            }
-          } else {
-            result.add(globStat);
-          }
-        }
-      }
-    }
-    if (!errors.isEmpty()) {
-      throw new InvalidInputException(errors);
-    }
-    return result;
-  }
+	private List<FileStatus> singleThreadedListStatus(JobConf job, Path[] dirs, PathFilter inputFilter,
+			boolean recursive) throws IOException {
+		List<FileStatus> result = new ArrayList<FileStatus>();
+		List<IOException> errors = new ArrayList<IOException>();
+		for (Path p : dirs) {
+			FileSystem fs = p.getFileSystem(job);
+			FileStatus[] matches = fs.globStatus(p, inputFilter);
+			if (matches == null) {
+				errors.add(new IOException("Input path does not exist: " + p));
+			} else if (matches.length == 0) {
+				errors.add(new IOException("Input Pattern " + p + " matches 0 files"));
+			} else {
+				for (FileStatus globStat : matches) {
+					if (globStat.isDirectory()) {
+						RemoteIterator<LocatedFileStatus> iter = fs.listLocatedStatus(globStat.getPath());
+						while (iter.hasNext()) {
+							LocatedFileStatus stat = iter.next();
+							if (inputFilter.accept(stat.getPath())) {
+								if (recursive && stat.isDirectory()) {
+									addInputPathRecursively(result, fs, stat.getPath(), inputFilter);
+								} else {
+									result.add(stat);
+								}
+							}
+						}
+					} else {
+						result.add(globStat);
+					}
+				}
+			}
+		}
+		if (!errors.isEmpty()) {
+			throw new InvalidInputException(errors);
+		}
+		return result;
+	}
 
   /**
    * A factory that makes the split for this class. It can be overridden

@@ -260,9 +260,12 @@ import org.apache.hadoop.hdfs.server.protocol.NamespaceInfo;
 import org.apache.hadoop.hdfs.server.protocol.StorageReceivedDeletedBlocks;
 import org.apache.hadoop.hdfs.server.protocol.StorageReport;
 import org.apache.hadoop.hdfs.server.protocol.VolumeFailureSummary;
+import org.apache.hadoop.hdfs.util.ReadOnlyList;
 import org.apache.hadoop.io.EnumSetWritable;
 import org.apache.hadoop.io.IOUtils;
 import org.apache.hadoop.io.Text;
+import org.apache.hadoop.io.nativeio.NativeIO;
+import org.apache.hadoop.io.nativeio.NativeIOException;
 import org.apache.hadoop.ipc.RetriableException;
 import org.apache.hadoop.ipc.RetryCache;
 import org.apache.hadoop.ipc.Server;
@@ -2136,6 +2139,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     src = dir.resolvePath(pc, srcArg, pathComponents);
     final INodesInPath iip = dir.getINodesInPath(src, true);
     final INodeFile inode = INodeFile.valueOf(iip.getLastINode(), src);
+    //LOG.info("blockLocationInt called  =" + inode.getLocalName());
     if (isPermissionEnabled) {
       dir.checkPathAccess(pc, iip, FsAction.READ);
       checkUnreadableBySuperuser(pc, inode, iip.getPathSnapshotId());
@@ -3768,6 +3772,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     // A file is considered deleted, if it is not in the inodeMap or is marked
     // as deleted in the snapshot feature.
     if (isFileDeleted(file)) {
+    	//LOG.info("[WONKI == isFileDeleted] : isFileDeleted called");
       throw new FileNotFoundException(src);
     }
     String clientName = file.getFileUnderConstructionFeature().getClientName();
@@ -3990,6 +3995,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     waitForLoadingFSImage();
     Map.Entry<BlocksMapUpdateInfo, HdfsFileStatus> res = null;
     writeLock();
+    //LOG.info("WONKI : rename called");
     try {
       checkOperation(OperationCategory.WRITE);
       checkNameNodeSafeMode("Cannot rename " + src);
@@ -4092,10 +4098,12 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       if (acquireINodeMapLock) {
         dir.writeLock();
       }
-      try {
-        dir.removeFromInodeMap(removedINodes);
-      } finally {
-        if (acquireINodeMapLock) {
+			try {
+				/* wonki modify null process */
+				if (!dir.nvram_enabled)
+					dir.removeFromInodeMap(removedINodes);
+			} finally {
+				if (acquireINodeMapLock) {
           dir.writeUnlock();
         }
       }
@@ -4492,11 +4500,15 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       final INodesInPath iip, final Block commitBlock) throws IOException {
     assert hasWriteLock();
     Preconditions.checkArgument(fileINode.isUnderConstruction()); 
-    if (!blockManager.commitOrCompleteLastBlock(fileINode, commitBlock, this.dir.nvram_enabled)) {
-    //	if(!blockManager.commitOrCompleteLastBlock(fileINode, commitBlock)) {
+    if(this.dir.nvram_enabled) {
+    if (!blockManager.commitOrCompleteLastBlock(fileINode, fileINode, commitBlock, this.dir)) {
       return;
     } 
-
+    } else{
+      if(!blockManager.commitOrCompleteLastBlock(fileINode, commitBlock)) {
+        return;
+      } 
+    }
     // Adjust disk space consumption if required
     final long diff = fileINode.getPreferredBlockSize() - commitBlock.getNumBytes();    
     if (diff > 0) {
@@ -4524,10 +4536,21 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     // The file is no longer pending.
     // Create permanent INode, update blocks. No need to replace the inode here
     // since we just remove the uc feature from pendingFile
-    pendingFile.toCompleteFile(now());
-    if(this.dir.nvram_enabled && pendingFile.getLastBlock() != null) {
-    this.dir.rootDir.commitChild(pendingFile, blockManager.getBlockCollection(pendingFile.getLastBlock()), this.dir.nvram_enabled, dir);
-    }
+    long time = now();
+		if (this.dir.nvram_enabled) {
+			if (pendingFile.isUnderConstruction() == true) {
+				LOG.info("File Complete = " + pendingFile.getLocalName());
+				NativeIO.putIntTest(FSDirectory.nvramAddress, 2,
+						((INodeWithAdditionalFields) pendingFile).nvram_location + 356);
+			}
+			NativeIO.putLongTest(FSDirectory.nvramAddress, time,
+					((INodeWithAdditionalFields) pendingFile).nvram_location + 332);
+		}
+		pendingFile.toCompleteFile(time);
+
+//    if(this.dir.nvram_enabled && pendingFile.getLastBlock() != null) {
+//    this.dir.rootDir.commitChild(pendingFile, blockManager.getBlockCollection(pendingFile.getLastBlock()), this.dir.nvram_enabled, dir);
+//    }
 
     waitForLoadingFSImage();
     // close file and persist block allocations for this file
@@ -6513,11 +6536,14 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     return blockId;
   }
 
-  private boolean isFileDeleted(INodeFile file) {
-    // Not in the inodeMap or in the snapshot but marked deleted.
-    if (dir.getInode(file.getId()) == null) {
-    	return true;
-    }
+	private boolean isFileDeleted(INodeFile file) {
+		// Not in the inodeMap or in the snapshot but marked deleted.
+		boolean nvram_enabled = dir.getEnabled();
+		if (!nvram_enabled) {
+			if (dir.getInode(file.getId()) == null) {
+				return true;
+			}
+		}
 
     // look at the path hierarchy to see if one parent is deleted by recursive
     // deletion
@@ -6527,11 +6553,30 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       if (tmpParent == null) {
         return true;
       }
-      boolean nvram_enabled = dir.getEnabled(); 
-      int location = dir.NVramMap.get(tmpChild.getLocalName());
-//      LOG.info("location in isFileDelete : name = " + tmpChild.getLocalName() + " location = " + location);
-      INode childINode = tmpParent.getChild(tmpChild.getLocalNameBytes(),
-          Snapshot.CURRENT_STATE_ID, nvram_enabled, location);
+			int location = -1;
+			INode childINode = null;
+			if (nvram_enabled) {
+				location = ((INodeWithAdditionalFields) tmpChild).nvram_location;
+
+				if (location == -1 || location == 0) {
+					childINode = null;
+				} else {
+					try {
+						long id = NativeIO.readLongTest(FSDirectory.nvramAddress, location + 316);
+						childINode = dir.INode_Cache.get(id);
+						if (childINode == null) {
+							childINode = tmpParent.getChild(tmpChild.getLocalNameBytes(), Snapshot.CURRENT_STATE_ID,
+									nvram_enabled, location);
+						}
+					} catch (NativeIOException e) {
+						LOG.info("nativeException occur");
+					}
+				}
+			} else {
+				childINode = tmpParent.getChild(tmpChild.getLocalNameBytes(), Snapshot.CURRENT_STATE_ID, nvram_enabled,
+						location);
+			}
+
       if (childINode == null || !childINode.equals(tmpChild)) {
         // a newly created INode with the same name as an already deleted one
         // would be a different INode than the deleted one

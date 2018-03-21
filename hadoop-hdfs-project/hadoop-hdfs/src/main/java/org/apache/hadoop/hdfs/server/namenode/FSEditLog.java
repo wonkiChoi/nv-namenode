@@ -432,6 +432,7 @@ public class FSEditLog implements LogsPurgeable {
    */
   void logEdit(final FSEditLogOp op) {
 	  
+//	  if(this.nvram_enabled == false) {
     synchronized (this) {
       assert isOpenForWrite() :
         "bad state: " + state;
@@ -460,9 +461,13 @@ public class FSEditLog implements LogsPurgeable {
       }
       isAutoSyncScheduled = true;
     }
+	  
     
     // sync buffered edit log entries to persistent store
     logSync();
+//	  } else {
+//		  txid = 2;
+//	  }
   }
 
   /**

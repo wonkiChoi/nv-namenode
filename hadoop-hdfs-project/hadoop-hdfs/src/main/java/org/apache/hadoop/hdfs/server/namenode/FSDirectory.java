@@ -137,8 +137,15 @@ private static final int SIZE = 10000;
 	              build());
 	    r.addSnapshottableFeature();
 	    r.setSnapshotQuota(0);
-	    //mmap use
-	    nvramAddress = NativeIO.ReturnNVRAMAddress(1024*1024*1024, 4096);
+	
+	  nvramAddress = new long[1000];
+		for (int j=0; j < 1000; j++) {
+			nvramAddress[j] = 0;
+		}
+		//1610612736
+		nvramAddress[0] = NativeIO.ReturnNVRAMAddress(1610612736, 4096);
+		nvramAddress[1] = NativeIO.ReturnNVRAMAddress(1610612736, 4096 + 1610612736);
+		nvramAddress[2] = NativeIO.ReturnNVRAMAddress(1610612736, 4096 + (1610612736 * 2));
 
 //	    int inode_num = NativeIO.readIntFromNVRAM(4096, 4096, 0);
 //	    if(inode_num != 0) {
@@ -195,9 +202,16 @@ private static final int SIZE = 10000;
   public final static byte[] DOT_INODES = 
       DFSUtil.string2Bytes(DOT_INODES_STRING);
 
-  INodeDirectory rootDir;
-  ByteBuffer rootByte;
-  public static long nvramAddress;
+  public INodeDirectory rootDir;
+
+  public long addTime = 0;
+  public long getTime = 0;
+  public long removeTime = 0;
+  public long renameTime = 0;
+  public int numINode;
+  public INodeCache<Long,INode> INode_Cache = null;
+ // public static long nvramAddress;
+  public static long[] nvramAddress;
   private final FSNamesystem namesystem;
   private volatile boolean skipQuotaCheck = false; //skip while consuming edits
   private final int maxComponentLength;
@@ -207,7 +221,8 @@ private static final int SIZE = 10000;
   private final long contentSleepMicroSec;
   private final INodeMap inodeMap; // Synchronized by dirLock
   public final NvramMap NVramMap;
-  ByteBuffer inodeByteMap;
+  public final DirectoryCache directoryCache;
+  
   private long yieldCount = 0; // keep track of lock yield count.
 
   private final int inodeXAttrsLimit; //inode xattrs max limit
@@ -296,6 +311,8 @@ private static final int SIZE = 10000;
     rootDir = createRoot(ns);
     inodeMap = INodeMap.newInstance(rootDir);
     NVramMap = NvramMap.newInstance(rootDir);
+    directoryCache = DirectoryCache.newInstance(rootDir);
+    
     this.isPermissionEnabled = conf.getBoolean(
       DFSConfigKeys.DFS_PERMISSIONS_ENABLED_KEY,
       DFSConfigKeys.DFS_PERMISSIONS_ENABLED_DEFAULT);
@@ -377,6 +394,7 @@ private static final int SIZE = 10000;
     this.editLog = ns.getEditLog();
     ezManager = new EncryptionZoneManager(this, conf);
     this.nvram_enabled = false;
+    this.numINode = 0;
   }
   
   FSDirectory(FSNamesystem ns, Configuration conf, boolean nvram_enabled) throws IOException, NativeIOException {
@@ -386,10 +404,7 @@ private static final int SIZE = 10000;
 	    NVramMap = NvramMap.newInstance(rootDir);
 	    RecoveryFromNVRAM(ns, nvram_enabled, rootDir);
 	    inodeMap = INodeMap.newInstance(rootDir);
-	   // if(nvram_enabled == true) {
-	       //	rootByte = createRoot(ns, nvram_enabled);
-   	     //inodeByteMap = NativeIO.allocateNVRAMBuffer(4096 * 4096);
-	   	   // }
+	    directoryCache = DirectoryCache.newInstance(rootDir);
    	    this.isPermissionEnabled = conf.getBoolean(
 	      DFSConfigKeys.DFS_PERMISSIONS_ENABLED_KEY,
 	      DFSConfigKeys.DFS_PERMISSIONS_ENABLED_DEFAULT);
@@ -471,6 +486,7 @@ private static final int SIZE = 10000;
 	    this.editLog = ns.getEditLog();
 	    ezManager = new EncryptionZoneManager(this, conf);
 	    this.nvram_enabled = nvram_enabled;
+	    this.numINode = 0;
 	    LOG.info("nvram_enabled in FSDirectory = " + nvram_enabled);
 	  }
   
@@ -481,6 +497,7 @@ private static final int SIZE = 10000;
 		
 		// mmap use
 		//int inode_num = NativeIO.readIntFromNVRAM(4096, 4096, 0);
+//		LOG.info("[WONKI : ] RecoveryFROMNVRAM called === nvramAddress " + nvramAddress[0]);
 		int inode_num = NativeIO.readIntTest(nvramAddress, 0);
 		if (inode_num != 0) {
 			LOG.info("createRoot inode_num = " + inode_num);
@@ -512,10 +529,7 @@ FSDirectory(FSNamesystem ns, Configuration conf, boolean nvram_enabled, boolean 
 	    rootDir = createRoot(ns, nvram_enabled, recovery);
 	    inodeMap = INodeMap.newInstance(rootDir);
 	    NVramMap = NvramMap.newInstance(rootDir);
-//	    if(nvram_enabled == true && recovery == true) {
-//	       	rootByte = createRoot(ns, nvram_enabled, recovery);
-// 	     inodeByteMap = NativeIO.allocateNVRAMBuffer(4096 * 4096);
-//	   	    }
+	    directoryCache = DirectoryCache.newInstance(rootDir);
  	    this.isPermissionEnabled = conf.getBoolean(
 	      DFSConfigKeys.DFS_PERMISSIONS_ENABLED_KEY,
 	      DFSConfigKeys.DFS_PERMISSIONS_ENABLED_DEFAULT);
@@ -597,6 +611,7 @@ FSDirectory(FSNamesystem ns, Configuration conf, boolean nvram_enabled, boolean 
 	    this.editLog = ns.getEditLog();
 	    ezManager = new EncryptionZoneManager(this, conf);
 	    this.nvram_enabled = nvram_enabled;
+	    this.numINode = 0;
 	  }
     
   FSNamesystem getFSNamesystem() {
@@ -720,7 +735,12 @@ FSDirectory(FSNamesystem ns, Configuration conf, boolean nvram_enabled, boolean 
     INodesInPath newiip;
     writeLock();
     try {
+    	long time = System.currentTimeMillis();
       newiip = addINode(existing, newNode, this.nvram_enabled);
+      long endtime = System.currentTimeMillis();
+      this.addTime = this.addTime + (endtime - time);
+      LOG.info("[checking Time ] addTime = " + this.addTime);
+      
     } finally {
       writeUnlock();
     }
@@ -797,14 +817,12 @@ FSDirectory(FSNamesystem ns, Configuration conf, boolean nvram_enabled, boolean 
             targets);
       getBlockManager().addBlockCollection(blockInfo, fileINode);
       fileINode.addBlock(blockInfo);
-      if(nvram_enabled) {
-    	int location = this.NVramMap.get(fileINode.getLocalName());
-    	//LOG.info("location in addblock : name = " + fileINode.getLocalName() 
-    	//+ " location = " + location);
-    	//rootDir.removeChild(fileINode, nvram_enabled, location);
-      //rootDir.addChild(fileINode, true, CURRENT_STATE_ID, this.nvram_enabled, this);
-    	rootDir.addBlockNVRAM(fileINode, location);
-      }
+			if (nvram_enabled) {
+				int location = -1;
+
+				location = fileINode.nvram_location;
+				rootDir.addBlockNVRAM(fileINode, location);
+			}
       if(NameNode.stateChangeLog.isDebugEnabled()) {
         NameNode.stateChangeLog.debug("DIR* FSDirectory.addBlock: "
             + path + " with " + block
@@ -1372,21 +1390,24 @@ FSDirectory(FSNamesystem ns, Configuration conf, boolean nvram_enabled, boolean 
       if (!isRename) {
         AclStorage.copyINodeDefaultAcl(inode);
       }
-
-			addToInodeMap(inode);
+      /* wonki modify null process*/
+			if (!nvram_enabled)
+				addToInodeMap(inode);
 
 		}
     return INodesInPath.append(existing, inode, inode.getLocalNameBytes());
   }
-
+  
   INodesInPath addLastINodeNoQuotaCheck(INodesInPath existing, INode i, boolean nvram_enabled) {
-  if(nvram_enabled == true) {
-	  try {
-	      return addLastINode(existing, i, false, nvram_enabled);
-	    } catch (QuotaExceededException e) {
-	      NameNode.LOG.warn("FSDirectory.addChildNoQuotaCheck - unexpected", e);
-	    }
-	    return null;
+		if (nvram_enabled == true) {
+			try {
+				//LOG.info("addLastINodeNoQuoTaCheck");
+				return addLastINode(existing, i, false, nvram_enabled);
+				
+			} catch (QuotaExceededException e) {
+				NameNode.LOG.warn("FSDirectory.addChildNoQuotaCheck - unexpected", e);
+			}
+			return null;
   } else {
 	  try {
       return addLastINode(existing, i, false);
@@ -2013,7 +2034,7 @@ FSDirectory(FSNamesystem ns, Configuration conf, boolean nvram_enabled, boolean 
   public INodesInPath getINodesInPath(String path, boolean resolveLink)
       throws UnresolvedLinkException {
     final byte[][] components = INode.getPathComponents(path);
-    return INodesInPath.resolve(rootDir, components, resolveLink, nvram_enabled,this);
+    return INodesInPath.resolve(rootDir, components, resolveLink, nvram_enabled, this);
   }
 
   /** @return the last inode in the path. */
@@ -2037,8 +2058,9 @@ FSDirectory(FSNamesystem ns, Configuration conf, boolean nvram_enabled, boolean 
   INodesInPath getINodesInPath4Write(String src, boolean resolveLink)
           throws UnresolvedLinkException, SnapshotAccessControlException {
     final byte[][] components = INode.getPathComponents(src);
+    //LOG.info("getINodesInPath4Write = " + src);
     INodesInPath inodesInPath = INodesInPath.resolve(rootDir, components,
-        resolveLink, nvram_enabled,this);
+        resolveLink, nvram_enabled, this);
     if (inodesInPath.isSnapshot()) {
       throw new SnapshotAccessControlException(
               "Modification on a read-only snapshot is disallowed");

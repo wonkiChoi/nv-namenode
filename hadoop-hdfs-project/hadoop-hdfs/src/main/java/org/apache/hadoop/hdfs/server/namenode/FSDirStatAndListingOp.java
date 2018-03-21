@@ -48,7 +48,9 @@ import org.apache.hadoop.io.nativeio.NativeIOException;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Iterator;
 
 class FSDirStatAndListingOp {
 	 static final Logger LOG = LoggerFactory.getLogger(FSDirStatAndListingOp.class);
@@ -198,44 +200,35 @@ class FSDirStatAndListingOp {
 			HdfsFileStatus listing[];
 
 			if (fsd.nvram_enabled) {
-				int start, end, child_num;
-				int location = 0;
+				int child_num;
+				int location = -1;
 				if (dirInode.getId() == INodeId.ROOT_INODE_ID) {
 					child_num = dirInode.child_num;
 					listing = new HdfsFileStatus[child_num];
-					start = dirInode.start;
-					end = dirInode.end;
-					if(end == 0 ) {
-						end = start;
-					}
-					//LOG.info("root = " + start + " -- " + end + " child_num = " + child_num);
-				} else {
-					location = fsd.NVramMap.get(dirInode.getLocalName());
-					child_num = NativeIO.readIntTest(FSDirectory.nvramAddress, location + 4092 - 4);
-					listing = new HdfsFileStatus[child_num];
-					start = NativeIO.readIntTest(FSDirectory.nvramAddress, location + 4092 - 8);
-					end = NativeIO.readIntTest(FSDirectory.nvramAddress, location + 4092 - 12);
-					if(end == 0 ) {
-						end = start;
-					}
-					//LOG.info("dir = " + dirInode.getLocalName()+ " start--end " + start + " -- " + end + " child_num = " + child_num);
-				}
-					for (int i = start; i <= end; i = i + 4096) {
+					if(dirInode.children_location != null) {
+					for (int i = 0; i < dirInode.children_location.size(); i++) {
 						// get strange child not parent
-						int parent_location = -1;
-						try {
-							parent_location = NativeIO.readIntTest(FSDirectory.nvramAddress, i);
-						} catch (NativeIOException e) {
-							LOG.info("NativeIOException occur");
+						INode cur = dirInode.getChild(dirInode.getLocalNameBytes(), Snapshot.CURRENT_STATE_ID,
+								fsd.nvram_enabled, dirInode.children_location.get(i));
+						if (cur != null) {
+							byte curPolicy = isSuperUser && !cur.isSymlink() ? cur.getLocalStoragePolicyID()
+									: BlockStoragePolicySuite.ID_UNSPECIFIED;
+							listing[listingCnt] = createFileStatus(fsd, src, cur.getLocalNameBytes(), cur, needLocation,
+									getStoragePolicyID(curPolicy, parentStoragePolicy), snapshot, isRawPath, iip);
+							listingCnt++;
 						}
-						if (location == parent_location) {
+					}
+				}
+				} else {
+					ArrayList<Integer> child = fsd.directoryCache.get(dirInode.getId());
+					if (child != null) {
+						Iterator<Integer> iter = child.iterator();
+						listing = new HdfsFileStatus[child.size()];
+
+						while (iter.hasNext()) {
 							INode cur = dirInode.getChild(dirInode.getLocalNameBytes(), Snapshot.CURRENT_STATE_ID,
-									fsd.nvram_enabled, i);
+									fsd.nvram_enabled, iter.next());
 							if (cur != null) {
-//								LOG.info("file location = " + i + " start <==> end " + start + " " + end);
-//								LOG.info("parent_location = " + parent_location + " listingCnt " + listingCnt + " childname = "
-//							+ cur.getLocalName() + " directory name = " + dirInode.getLocalName() + " directory child_num = " + child_num );
-//								LOG.info(" directory name = " + dirInode.getLocalName());
 								byte curPolicy = isSuperUser && !cur.isSymlink() ? cur.getLocalStoragePolicyID()
 										: BlockStoragePolicySuite.ID_UNSPECIFIED;
 								listing[listingCnt] = createFileStatus(fsd, src, cur.getLocalNameBytes(), cur,
@@ -244,9 +237,82 @@ class FSDirStatAndListingOp {
 								listingCnt++;
 							}
 						}
+					} else {
+						location = dirInode.nvram_location;
+						if (location == 0) {
+							LOG.info("dir error");
+						}
+						int[] loc = null;
+						int[] loc2 = null;
+						int next_dir =  -1;
+						int page_num = 1;
+						
+						ArrayList<Integer> child_int = new ArrayList<Integer>();
+												
+						while (next_dir != 0) {
+							if (page_num == 1) {
+								loc = NativeIO.readIntArr(FSDirectory.nvramAddress, location, 0);
+								next_dir = NativeIO.readIntTest(FSDirectory.nvramAddress, location + 4092 - 8);
+								for(int idx : loc) {
+									child_int.add(idx);
+								}
+								
+							} else {
+								loc2 = NativeIO.readIntArr(FSDirectory.nvramAddress, next_dir, 1);
+								next_dir = NativeIO.readIntTest(FSDirectory.nvramAddress, next_dir + 4092 - 8);
+								for(int idx : loc2) {
+									child_int.add(idx);
+								}
+							}
+							page_num++;							
+						}
+						listing = new HdfsFileStatus[child_int.size()];
+//						int length = 0;
+//						if(loc != null)
+//							length = loc.length;
+//						if(loc2 != null)
+//							length = length + loc2.length;
+//						listing = new HdfsFileStatus[length];
+
+						for(int index : child_int) {
+//					if(loc != null) {
+//						for(int index : loc) {
+								INode cur = dirInode.getChild(dirInode.getLocalNameBytes(), Snapshot.CURRENT_STATE_ID,
+										fsd.nvram_enabled, index);
+								if (cur != null) {
+									byte curPolicy = isSuperUser && !cur.isSymlink() ? cur.getLocalStoragePolicyID()
+											: BlockStoragePolicySuite.ID_UNSPECIFIED;
+									listing[listingCnt] = createFileStatus(fsd, src, cur.getLocalNameBytes(), cur,
+											needLocation, getStoragePolicyID(curPolicy, parentStoragePolicy), snapshot,
+											isRawPath, iip);
+									listingCnt++;
+								}
+						}
+				//	}
+//					if(loc2 != null) {						
+//						for(int index : loc2) {
+//							INode cur = dirInode.getChild(dirInode.getLocalNameBytes(), Snapshot.CURRENT_STATE_ID,
+//									fsd.nvram_enabled, index);
+//							if (cur != null) {
+//								byte curPolicy = isSuperUser && !cur.isSymlink() ? cur.getLocalStoragePolicyID()
+//										: BlockStoragePolicySuite.ID_UNSPECIFIED;
+//								listing[listingCnt] = createFileStatus(fsd, src, cur.getLocalNameBytes(), cur,
+//										needLocation, getStoragePolicyID(curPolicy, parentStoragePolicy), snapshot,
+//										isRawPath, iip);
+//								listingCnt++;
+//							}
+//					}
+//					}
+				//		}
+
+						DirectoryCacheMember cm = new DirectoryCacheMember(dirInode.getLocalName(), child_int , dirInode.getId());
+						if(fsd.directoryCache.size() == 1000) {
+							fsd.directoryCache.pop();
+						}
+						fsd.directoryCache.enqueue(cm);
 					}
-				return new DirectoryListing(listing, 0);
-				
+				}
+				return new DirectoryListing(listing, 0);		
 			} else {
 				listing = new HdfsFileStatus[numOfListing];
 				for (int i = 0; i < numOfListing && locationBudget > 0; i++) {
@@ -328,7 +394,7 @@ class FSDirStatAndListingOp {
       throws IOException {
     fsd.readLock();
     try {
-      final INode i = src.getLastINode();    
+      final INode i = src.getLastINode();
       byte policyId = includeStoragePolicy && i != null && !i.isSymlink() ?
           i.getStoragePolicyID() : BlockStoragePolicySuite.ID_UNSPECIFIED;
       return i == null ? null : createFileStatus(

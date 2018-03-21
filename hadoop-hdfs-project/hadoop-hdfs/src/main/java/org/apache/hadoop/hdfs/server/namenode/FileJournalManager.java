@@ -31,6 +31,7 @@ import org.apache.commons.logging.LogFactory;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileUtil;
+import org.apache.hadoop.hdfs.DFSConfigKeys;
 import org.apache.hadoop.hdfs.protocol.HdfsConstants;
 import org.apache.hadoop.hdfs.server.common.HdfsServerConstants.NodeType;
 import org.apache.hadoop.hdfs.server.common.Storage;
@@ -109,10 +110,20 @@ public class FileJournalManager implements JournalManager {
   synchronized public EditLogOutputStream startLogSegment(long txid,
       int layoutVersion) throws IOException {
     try {
+      boolean nvram_enabled = conf.getBoolean(DFSConfigKeys.DFS_NAME_NVRAM, DFSConfigKeys.DFS_NAME_NVRAM_DEFAULT);
       currentInProgress = NNStorage.getInProgressEditsFile(sd, txid);
-      EditLogOutputStream stm = new EditLogFileOutputStream(conf,
+      EditLogOutputStream stm = null;
+      if(nvram_enabled) {
+    	  if(txid == 1) {
+    	   stm = new EditLogFileOutputStream(conf,
+    	             currentInProgress, outputBufferCapacity);
+    	   stm.create(layoutVersion);
+    	  }     	  
+      } else{
+      stm = new EditLogFileOutputStream(conf,
           currentInProgress, outputBufferCapacity);
       stm.create(layoutVersion);
+      }
       return stm;
     } catch (IOException e) {
       LOG.warn("Unable to start log segment " + txid +

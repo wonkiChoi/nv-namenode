@@ -106,7 +106,7 @@ public class NNBenchWithoutMR {
         try {
           out = fileSys.create(
                   new Path(taskDir, "" + index), false, 512,
-                  (short)1, bytesPerBlock);
+                  (short)3, bytesPerBlock);
           success = true;
         } catch (IOException ioe) { 
           success=false; 

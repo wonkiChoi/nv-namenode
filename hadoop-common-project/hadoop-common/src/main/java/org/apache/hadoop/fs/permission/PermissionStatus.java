@@ -30,6 +30,7 @@ import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 
 /**
  * Store permission related information.
@@ -102,18 +103,18 @@ public class PermissionStatus implements Writable {
     permission = FsPermission.read(in);
   }
   
-  public void readFields(int new_offset, int pos, long ptr) throws IOException {
-	  //int size = NativeIO.readIntFromNVRAM(4096, new_offset, pos);
-	  int size = NativeIO.readIntTest(ptr, new_offset + pos);
-	  int new_pos = pos + 4;
-	  //username = new String(NativeIO.readBAFromNVRAM(4096, new_offset, new_pos, size));
-	  username = new String(NativeIO.readBATest(ptr, new_offset + new_pos, size));
-	  new_pos = new_pos + 300;
-	  //size = NativeIO.readIntFromNVRAM(4096, new_offset, new_pos);
-	  size = NativeIO.readIntTest(ptr, new_offset + new_pos);
-	  new_pos = new_pos + 4;
-	  groupname = new String(NativeIO.readBATest(ptr, new_offset + new_pos, size));
-	  new_pos = new_pos + 300;
+  public void readFields(int new_offset, int pos, long[] ptr) throws IOException {
+
+	  int new_pos = pos;
+
+	 // username = new String(NativeIO.readIntBATest(ptr, new_offset + new_pos));
+	  username = new String(NativeIO.readIntPermTest(ptr, new_offset + new_pos));
+	  new_pos = new_pos + 304;
+
+	//  groupname = new String(NativeIO.readIntBATest(ptr, new_offset + new_pos));
+	  groupname = new String(NativeIO.readIntPermTest(ptr, new_offset + new_pos));
+	  new_pos = new_pos + 304;
+	  
 	  permission = FsPermission.read(new_offset, new_pos, ptr);
 	  new_pos = new_pos + 4;
 	  this.pos = new_pos;
@@ -154,7 +155,7 @@ public class PermissionStatus implements Writable {
 	    return p;
 	  }
   
-  public static PermissionStatus read(int new_offset, int pos, long ptr) throws IOException {
+  public static PermissionStatus read(int new_offset, int pos, long[] ptr) throws IOException {
 	    PermissionStatus p = new PermissionStatus();
 	    p.readFields(new_offset, pos, ptr);
 	    return p;

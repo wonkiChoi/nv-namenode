@@ -91,15 +91,15 @@ public class INodeDirectory extends INodeWithAdditionalFields
   }
 
   protected static final int DEFAULT_FILES_PER_DIRECTORY = 5;
+  static final int GRANUL_NVRAM = 1610612736;
+  //static final int GRANUL_NVRAM = 40960;
   final static byte[] ROOT_NAME = DFSUtil.string2Bytes("");
 
   private List<INode> children = null;
+  public List<Integer> children_location = null;
   public int offset;
   public int pos;
-  public int nvram_location;
   public int child_num;
-  public int start;
-  public int end;
   
   /** constructor */
   public INodeDirectory(long id, byte[] name, PermissionStatus permissions,
@@ -238,36 +238,6 @@ public class INodeDirectory extends INodeWithAdditionalFields
   int searchChildren(byte[] name, boolean nvram_enabled) {
 //	 TODO: NVRAM INODE is stored incrementally by time
    if (nvram_enabled == true) {
-//	   int inode_num = 0;
-//	   int lastposition = 0;
-//	   int index = 0;
-//	   
-//	   if(children_for_nvram == null) {
-//		   return -1;
-//	   }
-//	   inode_num = children_for_nvram.getInt();
-//	   lastposition = children_for_nvram.getInt();
-//	   
-//	   while (children_for_nvram.position() < lastposition) {
-//		   index++;
-//		   int size = children_for_nvram.getInt();
-//		   byte[] byte_for_inode = new byte[size];
-//		   children_for_nvram.get(byte_for_inode);
-//		   byte commit = children_for_nvram.get();
-//		   try {
-//			   INode inode = (INode) BytesUtil.toObject(byte_for_inode);
-//			   if(name.equals(inode.getLocalNameBytes())) {
-//				   if(commit == 1) {
-//					   return index; 
-//				   } else	{
-//					   return -1;
-//				   }
-//			   }
-//			} catch ( ClassNotFoundException | IOException e) {
-//			   e.printStackTrace();
-//		   }
-//		   
-//	   }
 	  } else {
     return children == null? -1: Collections.binarySearch(children, name);
 	  }
@@ -476,34 +446,29 @@ public class INodeDirectory extends INodeWithAdditionalFields
    */
 	public INode getChild(byte[] name, int snapshotId, boolean nvram_enabled, int location) {
 		if (nvram_enabled == true) {
-			//LOG.info("getChild find = " + new String(name));
-			//int index = 0;
+//			long gStart = System.currentTimeMillis();
+//			 LOG.info("[WONKI == getChild] : name = " + new String(name) + " location = " + location + " parent name = " + this.getLocalName());
 			try {
-				if(location == -1 || location == 0)
-				{
+				if (location == -1 || location == 0) {
 					return null;
 				}
+							
 				int pos = 0;
 				int new_offset = location;
-				//LOG.info("new_offset = " + new_offset);
-				//int root = NativeIO.readIntFromNVRAM(4096, new_offset, pos);
-				int root = NativeIO.readIntTest(FSDirectory.nvramAddress, new_offset + pos);
-				//LOG.info("root = " + root);
-				pos = pos + 4;
-				//int file_dir = NativeIO.readIntFromNVRAM(4096, new_offset, pos);
+				//long root = NativeIO.readLongTest(FSDirectory.nvramAddress, new_offset + pos);
+				pos = pos + 8;
+
 				int file_dir = NativeIO.readIntTest(FSDirectory.nvramAddress, new_offset + pos);
-				//LOG.info("file_dir = " + file_dir);
 				pos = pos + 4;
 
 				INode inode = null;
 				if (file_dir == 0) {
 					try {
 						INodeFile file = FSImageSerialization.readINodeFile(new_offset, pos);
-						pos = file.pos;
+						//pos = file.pos;
 						file.nvram_location = new_offset;
-						//LOG.info("setParent this.file  information = is root? " + this.isRoot());
 						file.setParent(this);
-						file.parent_location = this.nvram_location;
+					//	file.parent_location = this.nvram_location;
 						inode = (INode) file;
 					} catch (IOException e) {
 						LOG.info("IOException");
@@ -511,11 +476,10 @@ public class INodeDirectory extends INodeWithAdditionalFields
 				} else if (file_dir == 1) {
 					try {
 						INodeDirectory dir = FSImageSerialization.readINodeDir(new_offset, pos);
-						pos = dir.pos;
+						//pos = dir.pos;
 						dir.nvram_location = new_offset;
 						dir.setParent(this);
-						dir.parent_location = this.nvram_location;
-					//	LOG.info("setParent this.directory  information = is root? " + this.isRoot());
+						//dir.parent_location = this.nvram_location;
 						inode = (INode) dir;
 					} catch (IOException e) {
 						LOG.info("IOException");
@@ -524,75 +488,19 @@ public class INodeDirectory extends INodeWithAdditionalFields
 					return null;
 				}
 
-				//int commit = NativeIO.readIntFromNVRAM(4096, new_offset, 4092);
-				int commit = NativeIO.readIntTest(FSDirectory.nvramAddress, new_offset + 4092);
-				pos = pos + 4;
+				int commit = NativeIO.readIntTest(FSDirectory.nvramAddress,  new_offset + 4092);
+				//pos = pos + 4;
 
+//				long gExecTime = System.currentTimeMillis() - gStart;
+//				LOG.info("getChild ExecTime = " + gExecTime);
 				if (inode == null)
 					return null;
 
 				if (commit == 1) {
-					//LOG.info("getChild found name = " + inode.getLocalName());
 					return inode;
 				} else {
 					return null;
 				}
-				
-				/**
-				int inode_num = NativeIO.readIntFromNVRAM(4096, 4096, 0);
-				LOG.info("NativeIO inode_num " + inode_num);
-				if (inode_num == 0)
-					return null;
-
-				while (index < inode_num) {
-					int pos = 0;
-					int new_offset = 8192 + (index * 4096);
-					LOG.info("new_offset = " + new_offset);
-					int root = NativeIO.readIntFromNVRAM(4096, new_offset, pos);
-					pos = pos + 4;
-					int file_dir = NativeIO.readIntFromNVRAM(4096, new_offset, pos);
-					pos = pos + 4;
-
-					INode inode = null;
-					if (file_dir == 0) {
-						try {
-							INodeFile file = FSImageSerialization.readINodeFile(new_offset, pos);
-							pos = file.pos;
-							file.setParent(this);
-							inode = (INode) file;
-						} catch (IOException e) {
-							LOG.info("IOException");
-						}
-					} else if (file_dir == 1) {
-						try {
-							INodeDirectory dir = FSImageSerialization.readINodeDir(new_offset, pos);
-							pos = dir.pos;
-							dir.setParent(this);
-							inode = (INode) dir;
-						} catch (IOException e) {
-							LOG.info("IOException");
-						}
-					} else {
-						return null;
-					}
-
-					int commit = NativeIO.readIntFromNVRAM(4096, new_offset, pos);
-					pos = pos + 4;
-
-					if (inode == null)
-						return null;
-
-					LOG.info("found name = " + inode.getLocalName());
-					if (Arrays.equals(name, inode.getLocalNameBytes())) {
-						if (commit == 1) {
-							return inode;
-						} else {
-							index = index + 1;
-						}
-					} else {
-						index = index + 1;
-					}
-				}**/
 			} catch (NativeIOException e) {
 				LOG.info("native IO Exception occur");
 			}
@@ -604,7 +512,6 @@ public class INodeDirectory extends INodeWithAdditionalFields
 				final int i = ReadOnlyList.Util.binarySearch(c, name);
 				return i < 0 ? null : c.get(i);
 			}
-
 			return sf.getChild(this, name, snapshotId, nvram_enabled, location);
 		}
 		return null;
@@ -706,6 +613,7 @@ public class INodeDirectory extends INodeWithAdditionalFields
   
 	public boolean removeChild(INode child, int latestSnapshotId, boolean nvram_enabled, FSDirectory fsd) {
 		if (nvram_enabled == false) {
+			//LOG.info("[WONKI == removeChild] : target name = " + child.getLocalName() + " parent name = " + this.getLocalName());
 			if (isInLatestSnapshot(latestSnapshotId)) {
 				// create snapshot feature if necessary
 				DirectoryWithSnapshotFeature sf = this.getDirectoryWithSnapshotFeature();
@@ -716,58 +624,97 @@ public class INodeDirectory extends INodeWithAdditionalFields
 			}
 			return removeChild(child);
 		} else {
+//			long rStart = System.currentTimeMillis();
 			// target to delete is child
-			int location = fsd.NVramMap.get(child.getLocalName());
+			int location = -1 ;
+			location = ((INodeWithAdditionalFields)child).nvram_location;
+			//LOG.info("[WONKI == removeChild] : target = " + child.getLocalName() + " parent name = " + child.getParent().getLocalName()
+			//		+ " nvram_location = " + location );
+			if(location == -1) {
+				LOG.info("WONKI : remove ERROR");
+			}
+
 			boolean result;
 			if (child.isDirectory()) {
 				try {
-					int start = NativeIO.readIntTest(FSDirectory.nvramAddress, location + 4092 - 8);
-					int end = NativeIO.readIntTest(FSDirectory.nvramAddress, location + 4092 - 12);
-					for (int i = start; i <= end; i++) {
-						int parent_location = -1;
-						parent_location = NativeIO.readIntTest(FSDirectory.nvramAddress, i);
-
-						if (parent_location == location) {
-							INode cur = this.getChild(this.getLocalNameBytes(), Snapshot.CURRENT_STATE_ID,
-									fsd.nvram_enabled, i);
+					int child_num = NativeIO.readIntTest(FSDirectory.nvramAddress, location + 4092 - 4);
+					int next_dir = NativeIO.readIntTest(FSDirectory.nvramAddress, location + 4092 - 8);
+					//if next_dir is 0 exit
+					for (int i = 0; i < child_num; i++) {
+						int record = i*4;
+						int index = NativeIO.readIntTest(FSDirectory.nvramAddress,
+									location + 936 + record);
+						int fir_dir = NativeIO.readIntTest(FSDirectory.nvramAddress, index + 8);
+						//LOG.info("[WONKI == removeChild] : dir  ::" + index + " cur = " + cur.getLocalName());
+						if (fir_dir == 1) {
+							INode cur = child.asDirectory().getChild(child.getLocalNameBytes(),
+									Snapshot.CURRENT_STATE_ID, fsd.nvram_enabled, index);
 							if (cur != null) {
-								if (cur.isDirectory()) {
-									boolean result_temp = removeChild(cur, latestSnapshotId, nvram_enabled, fsd);
-								} else {
-									result = removeChild(cur, nvram_enabled, i);
-									fsd.NVramMap.remove(cur);
-								}
+								result = cur.asDirectory().removeChild(cur, latestSnapshotId, nvram_enabled, fsd);
 							}
+						} else {
+							// LOG.info("[WONKI == removeChild] : file :: " +
+							// index + " cur = " + cur.getLocalName() + " delete
+							// index = " + index);
+							result = removeChild(nvram_enabled, index);
+							fsd.NVramMap.remove(
+									new String(NativeIO.readIntBATest(FSDirectory.nvramAddress, index + 12)), index);
 						}
 					}
-				} catch (NativeIOException e) {
-					LOG.info("NativeIOException occur");
-				}
-			}
 
-//			LOG.info("location in removeChild : name = " + child.getLocalName() + " location = " + location);
-			result = removeChild(child, nvram_enabled, location);
-			fsd.NVramMap.remove(child);
-			
-			if (this.getId() == INodeId.ROOT_INODE_ID) {
-				this.child_num = this.child_num - 1;
-				if(this.child_num == 0) {
-					this.start = 0;
-					this.end = 0;
-				}
-			} else {
-				int dir_location = fsd.NVramMap.get(this.getLocalName());
-				try {
-					int child_num = NativeIO.readIntTest(FSDirectory.nvramAddress, dir_location + 4092 - 4);
-					NativeIO.putIntTest(FSDirectory.nvramAddress, child_num - 1, dir_location + 4092 - 4);
-					if (child_num - 1 == 0) {
-						NativeIO.putIntTest(FSDirectory.nvramAddress, 0, dir_location + 4092 - 8);
-						NativeIO.putIntTest(FSDirectory.nvramAddress, 0, dir_location + 4092 - 12);
+					while (next_dir != 0) {
+						child_num = NativeIO.readIntTest(FSDirectory.nvramAddress, next_dir + 4092 - 4);
+						for (int i = 0; i < child_num; i++) {
+							int record_location = i*4;
+							int index = NativeIO.readIntTest(FSDirectory.nvramAddress, next_dir + record_location);
+							int fir_dir = NativeIO.readIntTest(FSDirectory.nvramAddress, index + 8);
+
+							if (fir_dir == 1) {
+									INode cur = child.asDirectory().getChild(child.getLocalNameBytes(), Snapshot.CURRENT_STATE_ID,
+											fsd.nvram_enabled, index);
+									if (cur != null) {
+									result = cur.asDirectory().removeChild(cur, latestSnapshotId, nvram_enabled, fsd);
+									}
+								} else {
+									result = removeChild(nvram_enabled, index);
+									fsd.NVramMap.remove(new String(NativeIO.readIntBATest(FSDirectory.nvramAddress, index + 12)), index);
+								}						
+						}
+						next_dir = NativeIO.readIntTest(FSDirectory.nvramAddress, next_dir + 4092 - 8);
 					}
 				} catch (NativeIOException e) {
 					LOG.info("NativeIOException occur");
 				}
 			}
+
+			//LOG.info("[WONKI == removeChild] :  : name = " + child.getLocalName() + " location = " + location);
+			result = removeChild(nvram_enabled, location);
+
+			if (this.getId() == INodeId.ROOT_INODE_ID) {
+				this.child_num = this.child_num - 1;
+				for(int i =0 ; i< this.children_location.size(); i++) {
+					if(this.children_location.get(i) == location) {
+						this.children_location.remove(i);
+						break;
+					}
+				}
+			} else {
+				int dir_location = -1;
+				dir_location = this.nvram_location;
+
+				if (dir_location == -1) {
+					LOG.info("WONKI : This error too");
+				}
+				result = removeChildinDirectory(nvram_enabled, dir_location, location, fsd);
+				if (fsd.directoryCache.get(this.getId()) != null) {
+					fsd.directoryCache.get(this.getId()).remove((Integer) location);
+				}
+			}
+			// LOG.info("[WONKI == removeChild] : Nvrammap remove = " +
+			// child.getLocalName() + " location = " + location);
+			fsd.NVramMap.remove(child.getLocalName(), location);
+//			long rExecTime = System.currentTimeMillis() - rStart ;
+//			LOG.info("removChild ExecTime = " + rExecTime);
 			return result;
 		}
 	}
@@ -791,137 +738,70 @@ public class INodeDirectory extends INodeWithAdditionalFields
     return true;
   }
   
-	public boolean removeChild(final INode child, boolean nvram_enabled, int location) {
-		int index = 0;
-		if (nvram_enabled == true) {
-			try {
-				if(location  == -1) {
-					return false;
-				}
-			//	LOG.info("removeChild called = " + child.getLocalName() + " offset = " + location);
-//				int pos = 0;
-//				int new_offset = location;
-//				int root = NativeIO.readIntFromNVRAM(4096, new_offset, pos);
-//				pos = pos + 4;
-//				int file_dir = NativeIO.readIntFromNVRAM(4096, new_offset, pos);
-//				pos = pos + 4;
-//
-//				INode inode = null;
-//				if (file_dir == 0) {
-//					try {
-//						INodeFile file = FSImageSerialization.readINodeFile(new_offset, pos);
-//						pos = file.pos;
-//						inode = (INode) file;
-//					} catch (IOException e) {
-//						LOG.info("IOException");
-//					}
-//				} else if (file_dir == 1) {
-//					try {
-//						INodeDirectory dir = FSImageSerialization.readINodeDir(new_offset, pos);
-//						pos = dir.pos;
-//						inode = (INode) dir;
-//					} catch (IOException e) {
-//						LOG.info("IOException");
-//					}
-//				} else {
-//					return false;
-//				}
-
-//				int past_pos = pos;
-//				int commit = NativeIO.readIntFromNVRAM(4096, new_offset, pos);
-				//int commit = NativeIO.readIntFromNVRAM(4096, location, 4092);
-				int commit = NativeIO.readIntTest(FSDirectory.nvramAddress, location + 4092);
-				//pos = pos + 4;
-				// LOG.info("buf = " + children_for_nvram);
-
-//				if (inode == null)
-//					return false;
-
-				if (commit == 1) {
-	//				NativeIO.putIntToNVRAM(4096, new_offset, 0, past_pos);
-					//NativeIO.putIntToNVRAM(4096, location, 0, 4092);
-					NativeIO.putIntTest(FSDirectory.nvramAddress, 0, location + 4092);
-					return true;
-				}
-		
-		
-				
-//				int inode_num = NativeIO.readIntFromNVRAM(4096, 4096, 0);
-//
-//				if (inode_num == 0)
-//					return false;
-//
-//				while (index < inode_num) {
-//					int pos = 0;
-//					// children_for_nvram = NativeIO.allocateNVRAMBuffer(512,
-//					// 8192 + (index * 4096));
-//					int new_offset = 8192 + (index * 4096);
-//					int root = NativeIO.readIntFromNVRAM(4096, new_offset, pos);
-//					pos = pos + 4;
-//					int file_dir = NativeIO.readIntFromNVRAM(4096, new_offset, pos);
-//					pos = pos + 4;
-//
-//					INode inode = null;
-//					if (file_dir == 0) {
-//						try {
-//							INodeFile file = FSImageSerialization.readINodeFile(new_offset, pos);
-//							pos = file.pos;
-//							inode = (INode) file;
-//						} catch (IOException e) {
-//							LOG.info("IOException");
-//						}
-//					} else if (file_dir == 1) {
-//						try {
-//							INodeDirectory dir = FSImageSerialization.readINodeDir(new_offset, pos);
-//							pos = dir.pos;
-//							inode = (INode) dir;
-//						} catch (IOException e) {
-//							LOG.info("IOException");
-//						}
-//					} else {
-//						return false;
-//					}
-//
-//					int past_pos = pos;
-//					int commit = NativeIO.readIntFromNVRAM(4096, new_offset, pos);
-//
-//					pos = pos + 4;
-//					// LOG.info("buf = " + children_for_nvram);
-//
-//					if (inode == null)
-//						return false;
-//
-//					if (Arrays.equals(child.getLocalNameBytes(), inode.getLocalNameBytes())) {
-//						if (commit == 1) {
-//
-//							NativeIO.putIntToNVRAM(4096, new_offset, 0, past_pos);
-//							// NativeIO.putIntToNVRAM(4096, 4096, inode_num -1,
-//							// 0);
-//							return true;
-//						} else {
-//
-//							index = index + 1;
-//						}
-//					} else {
-//
-//						index = index + 1;
-//					}
-//				}
-			} catch (NativeIOException e) {
-				LOG.info("native IO Exception occur");
-			}
-			return false;
-
-		} else {
-			final int i = searchChildren(child.getLocalNameBytes());
-			if (i < 0) {
+	public boolean removeChild(boolean nvram_enabled, int location) {
+		try {
+			if (location == -1) {
 				return false;
 			}
 
-			final INode removed = children.remove(i);
-			Preconditions.checkState(removed == child);
-			return true;
+			int commit = NativeIO.readIntTest(FSDirectory.nvramAddress, location + 4092);
+			if (commit == 1) {
+				NativeIO.putIntTest(FSDirectory.nvramAddress, 0, location + 4092);
+				return true;
+			}
+
+		} catch (NativeIOException e) {
+			LOG.info("native IO Exception occur");
 		}
+		return false;
+
+	}
+	
+	public boolean removeChildinDirectory(boolean nvram_enabled, int location, int target_offset, FSDirectory fsd) {
+		try {
+			boolean result;
+			int child_num = NativeIO.readIntTest(FSDirectory.nvramAddress, location + 4092 - 4);
+			int next_dir = NativeIO.readIntTest(FSDirectory.nvramAddress, location + 4092 - 8);
+			//if next_dir is 0 exit 
+			for (int i = 0; i < child_num; i++) {
+				int record = i*4;
+				int index = NativeIO.readIntTest(FSDirectory.nvramAddress,
+							location + 936 + record);
+				if(index == target_offset) {
+					int offset = NativeIO.readIntTest(FSDirectory.nvramAddress, location + 936 + 4*(child_num-1));
+					NativeIO.putIntTest(FSDirectory.nvramAddress, offset , location + 936 + record);
+					NativeIO.putIntTest(FSDirectory.nvramAddress, 0, location + 936 + 4*(child_num-1));
+					NativeIO.putIntTest(FSDirectory.nvramAddress, child_num - 1, location + 4092 - 4);
+					break;
+				}
+			}
+			int flag = 0;
+
+			while (next_dir != 0) {
+				child_num = NativeIO.readIntTest(FSDirectory.nvramAddress, next_dir + 4092 - 4);
+				for (int i = 0; i < child_num; i++) {
+					int record_location = i*4;
+					int index = NativeIO.readIntTest(FSDirectory.nvramAddress, next_dir + record_location);
+					if(index == target_offset) {
+						int offset = NativeIO.readIntTest(FSDirectory.nvramAddress, next_dir + 4*(child_num-1));
+						NativeIO.putIntTest(FSDirectory.nvramAddress, offset , next_dir + record_location);
+						NativeIO.putIntTest(FSDirectory.nvramAddress, 0, next_dir + 4*(child_num-1));
+						NativeIO.putIntTest(FSDirectory.nvramAddress, child_num - 1, next_dir + 4092 - 4);
+						flag = 1;
+						break;
+					}
+				}
+				next_dir = NativeIO.readIntTest(FSDirectory.nvramAddress, next_dir + 4092 - 8);
+				if(flag == 1)
+				{
+					next_dir = 0;
+				}
+			}
+		} catch (NativeIOException e) {
+			LOG.info("NativeIOException occur");
+		}
+		return true;
+
 	}
 	
 	public INode[] returnLiveINodeList(int inode_num) {
@@ -934,8 +814,8 @@ public class INodeDirectory extends INodeWithAdditionalFields
 					int pos = 0;
 					int new_offset = 4096 + (index * 4096);
 					//int root = NativeIO.readIntFromNVRAM(4096, new_offset, pos);
-					int root = NativeIO.readIntTest(FSDirectory.nvramAddress, new_offset + pos);
-					pos = pos + 4;
+					long root = NativeIO.readLongTest(FSDirectory.nvramAddress, new_offset + pos);
+					pos = pos + 8;
 					//int file_dir = NativeIO.readIntFromNVRAM(4096, new_offset, pos);
 					int file_dir = NativeIO.readIntTest(FSDirectory.nvramAddress, new_offset + pos);
 					pos = pos + 4;
@@ -969,11 +849,6 @@ public class INodeDirectory extends INodeWithAdditionalFields
 					if (commit == 1) {
 						if (root == 0 ) {
 							this.child_num++;
-							if (this.start == 0) {
-								this.start = new_offset;
-							} else {
-								this.end = new_offset;
-							}
 						}
 						LOG.info("return Live = " + inode.getLocalName());
 						list[list_mem++] = inode;
@@ -994,141 +869,28 @@ public class INodeDirectory extends INodeWithAdditionalFields
 		if (nvram_enabled == true) {
 			int index = 0;
 			try {
-				int location = fsd.NVramMap.get(child.getLocalName());
-//				LOG.info("location in commitChild : name = " + child.getLocalName()
-//				+ " location = " + location);
-				if (location == -1)
+				int location = -1;
+				location = ((INodeWithAdditionalFields) child).nvram_location;
+
+				if (location == -1) {
+					LOG.info("commit error");
 					return false;
-//				int pos = 0;
-//				int new_offset = location;
-//				int root = NativeIO.readIntFromNVRAM(4096, new_offset, pos);
-//				pos = pos + 4;
-//				int file_dir = NativeIO.readIntFromNVRAM(4096, new_offset, pos);
-//				pos = pos + 4;
-//
-//				INode inode = null;
-//				if (file_dir == 0) {
-//					try {
-//						INodeFile file = FSImageSerialization.readINodeFile(new_offset, pos);
-//						pos = file.pos;
-//						inode = (INode) file;
-//					} catch (IOException e) {
-//						LOG.info("IOException");
-//					}
-//				} else if (file_dir == 1) {
-//					try {
-//						INodeDirectory dir = FSImageSerialization.readINodeDir(new_offset, pos);
-//						pos = dir.pos;
-//						inode = (INode) dir;
-//					} catch (IOException e) {
-//						LOG.info("IOException");
-//					}
-//				} 
-//				
-//				int past_pos = pos;
-//				int commit = NativeIO.readIntFromNVRAM(4096, new_offset, pos);
-				//int commit = NativeIO.readIntFromNVRAM(4096, location, 4092);
-				int commit = NativeIO.readIntTest(FSDirectory.nvramAddress, location + 4092);
-//
-//				pos = pos + 4;
+				}
 
-//				if (inode == null)
-//					return false;
+				int numblocks = bc.numBlocks();
+				NativeIO.putLongTest(FSDirectory.nvramAddress, bc.getLastBlock().getNumBytes(),
+						location + 1584 + ((24 * (numblocks - 1)) + 8));
+				//NativeIO.putIntTest(FSDirectory.nvramAddress, 2, location + 356);
+				return true;
 
-			 if (commit == 1) {
-						int numblocks = bc.numBlocks();
-//						BlockInfoContiguous blocks[] = bc.getBlocks();
-//						for(int i = 0; i < numblocks; i++) {
-//							NativeIO.putLongToNVRAM(4096, location, blocks[i].getNumBytes(), index)
-//						}
-//						bc.getBlocks()
-						// mmap use
-//						NativeIO.putLongToNVRAM(4096, location, bc.getLastBlock().getNumBytes(),
-//								580 + ((24 * (numblocks - 1)) + 8));
-						NativeIO.putLongTest( FSDirectory.nvramAddress, bc.getLastBlock().getNumBytes(), 
-								location + 1580 + ((24 * (numblocks - 1)) + 8));
-						//NativeIO.putIntToNVRAM(4096, location, 2, 152);
-						NativeIO.putIntTest(FSDirectory.nvramAddress, 2, location + 352);
-
-//						 LOG.info("numblocks in commitChild = " +
-//						 numblocks + " " +
-//						 bc.getLastBlock().getNumBytes());
-						// bc.getLastBlock().getNumBytes();
-						// NativeIO.putIntToNVRAM(4096, 4096, inode_num -1,
-						// 0);
-						return true;
-			 } 
-				/**int inode_num = NativeIO.readIntFromNVRAM(4096, 4096, 0);
-
-				if (inode_num == 0)
-					return false;
-
-				while (index < inode_num) {
-					int pos = 0;
-					int new_offset = 8192 + (index * 4096);
-					int root = NativeIO.readIntFromNVRAM(4096, new_offset, pos);
-					pos = pos + 4;
-					int file_dir = NativeIO.readIntFromNVRAM(4096, new_offset, pos);
-					pos = pos + 4;
-
-					INode inode = null;
-					if (file_dir == 0) {
-						try {
-							INodeFile file = FSImageSerialization.readINodeFile(new_offset, pos);
-							pos = file.pos;
-							inode = (INode) file;
-						} catch (IOException e) {
-							LOG.info("IOException");
-						}
-					} else if (file_dir == 1) {
-						try {
-							INodeDirectory dir = FSImageSerialization.readINodeDir(new_offset, pos);
-							pos = dir.pos;
-							inode = (INode) dir;
-						} catch (IOException e) {
-							LOG.info("IOException");
-						}
-					} else {
-						return false;
-					}
-					int past_pos = pos;
-					int commit = NativeIO.readIntFromNVRAM(4096, new_offset, pos);
-
-					pos = pos + 4;
-
-					if (inode == null)
-						return false;
-
-					if (Arrays.equals(child.getLocalNameBytes(), inode.getLocalNameBytes())) {
-						if (commit == 1) {
-							int numblocks = bc.numBlocks();
-							NativeIO.putLongToNVRAM(4096, new_offset, bc.getLastBlock().getNumBytes(),
-									368 + ((24 * (numblocks - 1)) + 8));
-							NativeIO.putIntToNVRAM(4096, new_offset, 2, 152);
-
-							// LOG.info("numblocks in commitChild = " +
-							// numblocks + " " +
-							// bc.getLastBlock().getNumBytes());
-							// bc.getLastBlock().getNumBytes();
-							// NativeIO.putIntToNVRAM(4096, 4096, inode_num -1,
-							// 0);
-							return true;
-						} else {
-							index = index + 1;
-						}
-					} else {
-						index = index + 1;
-					}
-				}**/
 			} catch (NativeIOException e) {
 				LOG.info("native IO Exception occur");
 			}
 			return false;
 
-		} 
+		}
 		return false;
 	}
-	
 	
   /**
    * Add a child inode to the directory.
@@ -1162,7 +924,7 @@ public class INodeDirectory extends INodeWithAdditionalFields
     }
     return true;
   }
-  
+   
   public boolean addChild(INode node, final boolean setModTime,
 	      final int latestSnapshotId) throws QuotaExceededException {
 	    final int low = searchChildren(node.getLocalNameBytes());
@@ -1204,170 +966,53 @@ public class INodeDirectory extends INodeWithAdditionalFields
 	    return true;
 	  }
 
+	private int allocateNewSpace(FSDirectory fsd) {
+		int new_offset = 0;
+//		try {
+			fsd.numINode = fsd.numINode + 1;
+//			int inode_num = NativeIO.readIntTest(FSDirectory.nvramAddress, 0);
+//			inode_num = inode_num + 1;
+//
+//			NativeIO.putIntTest(FSDirectory.nvramAddress, inode_num, 0);
+
+		//	new_offset = 4096 + 4096 * (inode_num - 1);
+			new_offset = 4096 + 4096 * (fsd.numINode - 1);
+//		} catch (NativeIOException e) {
+//			LOG.info("nativeio exception occur");
+//		}
+		return new_offset;
+	}
+	
   /**
    * Add the node to the children list at the given insertion point.
    * The basic add method which actually calls children.add(..).
  * @throws IOException 
    */
-  /*
-   * need to erase code
-   */
-//  private void addChild(final INode node, final int insertionPoint, boolean nvram_enabled) {
-//	    
-//	  int last_position = 0;
-//	  int inode_num = 0; // except root
-//	  int commit = 1;
-//	  if(nvram_enabled == true) {
-//		  try{
-////		  if(children_for_nvram == null) {
-////			 try {
-////				 LOG.info("nvram allocate_mapping");
-////				 children_for_nvram = NativeIO.allocateNVRAMBuffer(4096, 4096);
-////				 
-////				 LOG.info("Buffer = " + children_for_nvram);
-////			} catch (NativeIOException e) {
-////				// TODO Auto-generated catch block
-////				e.printStackTrace();
-////			}			 
-////		  }
-//////		  children_for_nvram.clear();
-////		  LOG.info(" position1 = " + children_for_nvram.position());
-//		  //inode_num = children_for_nvram.getInt();
-//		  inode_num = NativeIO.readIntFromNVRAM(4096, 4096, 0);
-//		  //LOG.info(" inode_num = " + inode_num + " position = " + children_for_nvram.position());
-//		  //children_for_nvram.clear();
-//		  //LOG.info(" position2 = " + children_for_nvram.position());
-//		  inode_num = inode_num + 1;
-//		  NativeIO.putIntToNVRAM(4096, 4096, inode_num, 0);
-//		  //children_for_nvram.putInt(inode_num + 1);
-//		  //LOG.info(" position3 = " + children_for_nvram.position());
-//		  //last_position = children_for_nvram.getInt();
-//		  //LOG.info(" last_position = " + last_position + " position = " + children_for_nvram.position());
-//		  
-//			 //NativeIO.freeNVRAMBuffer(children_for_nvram);
-//		   //children_for_nvram = NativeIO.allocateNVRAMBuffer(4096, 8192 + 4096 * (inode_num));
-//		  //	  LOG.info("buf = " + children_for_nvram );
-//		  
-//		  int new_offset = 8192 + 4096 * (inode_num - 1);
-//		  //byte[] inode_byte = null;
-//			node.setParent(this);
-//			  if (node.getGroupName() == null) {
-//			        node.setGroup(getGroupName());
-//			      }
-//			int position = 0;
-//			if (this.getId() == INodeId.ROOT_INODE_ID) {
-//				LOG.info("root");
-//				//int current = children_for_nvram.position();
-//				//LOG.info("here>? " + children_for_nvram);
-//				position = NativeIO.putIntToNVRAM(4096, new_offset, 0, 0);
-////				children_for_nvram.putInt(0);
-//				LOG.info("nc?");
-////				children_for_nvram.position(current);
-////				LOG.info("asdf");
-////				int rootb = children_for_nvram.getInt();
-////				LOG.info("rootb = " + rootb);
-//			} else {
-//				position = NativeIO.putIntToNVRAM(4096, new_offset, 1, 0);
-//				//children_for_nvram.putInt(1);
-//			}
-//			
-//		
-//			if(node.isFile()) { // file 0 , directory 1
-//				//int currentc = children_for_nvram.position();
-//				//children_for_nvram.putInt(0);
-//				position = NativeIO.putIntToNVRAM(4096, new_offset, 0, position);
-//				LOG.info("addChild after is File() input =" + position);
-//				//children_for_nvram.position(currentc);
-//				//int fileb = children_for_nvram.getInt();
-//			  //LOG.info("file = " + fileb + " " + children_for_nvram);
-////			 byte [] node_name = node.getLocalNameBytes();
-////			 LOG.info("node_name = " + node_name.toString());
-////			 children_for_nvram.putInt(node_name.length);
-////			 children_for_nvram.put(node_name);
-////			 long fileid = node.getId();
-////			 int current = children_for_nvram.position();
-////			 children_for_nvram.putLong(fileid);
-////			 children_for_nvram.position(current);
-////			 long after = children_for_nvram.getLong();
-////			 LOG.info(children_for_nvram + " file id = " + fileid +" after " + after );
-//			  position = FSImageSerialization.writeINodeFile(node.asFile(), new_offset, ((INodeFile)node).isUnderConstruction(), position);
-//			  LOG.info("addChild after writeInodeFile input =" + position);
-//			} else if (node.isDirectory()) {
-//				position = NativeIO.putIntToNVRAM(4096, new_offset, 0, position);
-//			 //LOG.info("dir = " + children_for_nvram );
-//			   FSImageSerialization.writeINodeDirectory(node.asDirectory(), new_offset, position);		
-//			}
-////			LOG.info("test=" + node.getId()+ " " + node.getFullPathName() + " " + node.getLocalNameBytes().toString());
-////			byte [] inode_byte = BytesUtil.toByteArray(node);
-////			LOG.info("byte = " + inode_byte.toString());
-//
-//			
-////			INode inode = (INode) BytesUtil.toObject(inode_byte);
-////			int size = inode_byte.length;
-//
-////			LOG.info(" before position =" + last_position + "--buf--" + children_for_nvram);
-////			children_for_nvram.position(last_position);
-////			children_for_nvram.putInt(size);
-////			LOG.info(" size = "+ size + " buf =" + children_for_nvram);
-////			children_for_nvram.put(inode_byte);
-//		//	LOG.info(" position =" + children_for_nvram.position());
-//			position = NativeIO.putIntToNVRAM(4096, new_offset, commit, position);
-//			LOG.info("addChild after committ =" + position);
-//			//children_for_nvram.putInt(commit);
-//			//last_position = children_for_nvram[inode_num + 1].position();
-//			//LOG.info(" last_position = "+ last_position + " position =" + children_for_nvram[inode_num + 1].position());
-//			//children_for_nvram[0].clear();
-//			  
-//			//LOG.info(" position4 =" + children_for_nvram[0].position());
-//			//children_for_nvram[0].position(4);
-//			//children_for_nvram[0].putInt(last_position);
-//			 
-//			//LOG.info(" position5 =" + children_for_nvram[0].position());
-//			//children_for_nvram[0].clear();
-//			  
-//		//	LOG.info(" position6 =" + children_for_nvram.position());
-////			NativeIO.freeNVRAMBuffer(children_for_nvram);
-//		} catch (IOException e) {
-//			// TODO Auto-generated catch block
-//			LOG.info("ERROR = " + e.toString() + "Message =" + e.getMessage());
-//		}
-//		  
-//	  }
-//	 else {
-//	  if (children == null) {
-//      children = new ArrayList<INode>(DEFAULT_FILES_PER_DIRECTORY);
-//    }
-//    node.setParent(this);
-//    children.add(-insertionPoint - 1, node);
-//
-//    if (node.getGroupName() == null) {
-//      node.setGroup(getGroupName());
-//    }
-//	  }
-//  }
 	private void addChild(final INode node, final int insertionPoint, boolean nvram_enabled, FSDirectory fsd) {
-
 		if (nvram_enabled == true) {
 			int last_position = 0;
-			int inode_num = 0; // except root
 			int commit = 1;
 
 			try {
-//				boolean new_inode = fsd.NVramMap.isContain(node.getLocalName());
-
-				//inode_num = NativeIO.readIntFromNVRAM(4096, 4096, 0);
-				inode_num = NativeIO.readIntTest(FSDirectory.nvramAddress, 0);
-				inode_num = inode_num + 1;
-				//mmap use
-				//NativeIO.putIntToNVRAM(4096, 4096, inode_num, 0);
-				NativeIO.putIntTest(FSDirectory.nvramAddress, inode_num, 0);
-
-				//int new_offset = 8192 + 4096 * (inode_num - 1);
-				int new_offset = 4096 + 4096 * (inode_num - 1);
-				//int new_offset = 8192 + (4096 * inode_num);
-				fsd.NVramMap.put(node.getLocalName(), new_offset);
-//				LOG.info("addChild : name =" + node.getLocalName()+
-//						" location = " + new_offset);
+				int new_offset = allocateNewSpace(fsd); // refer total Inode num, allocate absolute address
+//				LOG.info("[WONKI : new_offset : " + new_offset);
+				int nvramAddrIdx = new_offset / GRANUL_NVRAM; // calculate idx for nvramAddress, allocate idx: 0 in root directory creation
+//				LOG.info("[WONKI : nvramAddrIdx " + nvramAddrIdx);
+				if (nvramAddrIdx == 1) {
+					LOG.info("nvramAddrIdx is 1");
+				}
+				if (nvramAddrIdx == 2) {
+					LOG.info("nvramAddrIdx is 2");
+				}
+				if (FSDirectory.nvramAddress[nvramAddrIdx] == 0) {
+//					LOG.info("[WONKI : not possible?]");
+					FSDirectory.nvramAddress[nvramAddrIdx] = NativeIO.ReturnNVRAMAddress(GRANUL_NVRAM, 4096 + (GRANUL_NVRAM * nvramAddrIdx));
+//					LOG.info("[WONKI : possbile?]");
+				}
+//				for(int i=0; i < 10; i++){
+//					LOG.info("list = " + FSDirectory.nvramAddress[i]);
+//				}
+				fsd.NVramMap.put(node.getLocalName(), new_offset); //MVramMap include absolute address
 				
 				node.setParent(this);
 				if (node.getGroupName() == null) {
@@ -1377,73 +1022,67 @@ public class INodeDirectory extends INodeWithAdditionalFields
 				int position = 0;
 				int directory_location = -1;
 				if (this.getId() == INodeId.ROOT_INODE_ID) {
-					//position = NativeIO.putIntToNVRAM(4096, new_offset, 0, 0);
-					position = NativeIO.putIntTest(FSDirectory.nvramAddress, 0, new_offset);
+					position = NativeIO.putLongTest(FSDirectory.nvramAddress, INodeId.ROOT_INODE_ID, new_offset );
 				} else {
-					//position = NativeIO.putIntToNVRAM(4096, new_offset, 1, 0);
-					directory_location = fsd.NVramMap.get(this.getLocalName());
-					position = NativeIO.putIntTest(FSDirectory.nvramAddress, directory_location, new_offset);
-				}
+					long parent_id = this.getId();
+					position = NativeIO.putLongTest(FSDirectory.nvramAddress, parent_id, new_offset );
 
+					directory_location = this.nvram_location;
+					if(directory_location == 0) {
+						try {
+						ArrayList<Integer> temp = fsd.NVramMap.get(this.getLocalName());
+						for (int k = 0; k < temp.size(); k++) {
+							if (NativeIO.readLongTest(FSDirectory.nvramAddress,
+									temp.get(k) + 316) == this.getId()) {
+								directory_location = temp.get(k);
+								break;
+							}
+						}
+						} catch (NativeIOException e) {
+							LOG.info("nativeException occured");
+						}
+					}
+					if (directory_location == -1) {
+						LOG.info("WONKI : Directory ERROR");
+					}
+				}
+				
 				if (node.isFile()) { // file 0 , directory 1
-					//position = NativeIO.putIntToNVRAM(4096, new_offset, 0, position);
 					position = NativeIO.putIntTest(FSDirectory.nvramAddress, 0, position);
 					position = FSImageSerialization.writeINodeFile(node.asFile(), new_offset,
 							((INodeFile) node).isUnderConstruction(), position, 0);	
 					if (this.getId() == INodeId.ROOT_INODE_ID) {
+						if (children_location == null) {
+							children_location = new ArrayList<Integer>(DEFAULT_FILES_PER_DIRECTORY);
+						}
+						children_location.add(new_offset);
 						this.child_num = this.child_num + 1;
-						if (start == 0) {
-							this.start = new_offset;
-						} else {
-							this.end = new_offset;
-						}
+						
 					} else {
-						int child_num = NativeIO.readIntTest(FSDirectory.nvramAddress, directory_location + 4092 - 4);
-						NativeIO.putIntTest(FSDirectory.nvramAddress, child_num + 1, directory_location + 4092 - 4);
-						int start;
-						start = NativeIO.readIntTest(FSDirectory.nvramAddress, directory_location + 4092 - 8);
-						if (start == 0) {
-							NativeIO.putIntTest(FSDirectory.nvramAddress, new_offset, directory_location + 4092 - 8);
-						} else {
-							NativeIO.putIntTest(FSDirectory.nvramAddress, new_offset, directory_location + 4092 - 12);
-						}
-				}
+						fsd.numINode = NativeIO.putChildrenInDirectory(FSDirectory.nvramAddress, new_offset, directory_location, fsd.numINode);
+					}
 				} else if (node.isDirectory()) {
-					//position = NativeIO.putIntToNVRAM(4096, new_offset, 1, position);
 					position = NativeIO.putIntTest(FSDirectory.nvramAddress, 1, position);
 					position = FSImageSerialization.writeINodeDirectory(node.asDirectory(), new_offset, position);
 					if (this.getId() == INodeId.ROOT_INODE_ID) {
+						if (children_location == null) {
+							children_location = new ArrayList<Integer>(DEFAULT_FILES_PER_DIRECTORY);
+						}
+						children_location.add(new_offset);
 						this.child_num = this.child_num + 1;
-						if (start == 0) {
-							this.start = new_offset;
-						} else {
-							this.end = new_offset;
-						}
-					} else {
-						int child_num = NativeIO.readIntTest(FSDirectory.nvramAddress, directory_location + 4092 - 4);
-						NativeIO.putIntTest(FSDirectory.nvramAddress, child_num + 1, directory_location + 4092 - 4);
-						int start;
-						start = NativeIO.readIntTest(FSDirectory.nvramAddress, directory_location + 4092 - 8);
-						if (start == 0) {
-							NativeIO.putIntTest(FSDirectory.nvramAddress, new_offset, directory_location + 4092 - 8);
-						} else {
-							NativeIO.putIntTest(FSDirectory.nvramAddress, new_offset, directory_location + 4092 - 12);
-						}
+					} else {				
+						fsd.numINode = NativeIO.putChildrenInDirectory(FSDirectory.nvramAddress, new_offset, directory_location, fsd.numINode);
 					}
 				}
-				
-				//position = NativeIO.putIntToNVRAM(4096, new_offset, commit, 4092);
 				position = NativeIO.putIntTest(FSDirectory.nvramAddress, commit, new_offset + 4092);
-				
-//				if (inode_num != 0) {
-//					INode[] list = returnLiveINodeList(inode_num);
-//				}
+			
 			} catch (IOException e) {
 				// TODO Auto-generated catch block
 				LOG.info("ERROR = " + e.toString() + "Message =" + e.getMessage());
 			}
-
 		} else {
+		//	LOG.info("[WONKI == addChild] : target name = " + node.getLocalName()+
+		//			" parent name = " + this.getLocalName());
 			if (children == null) {
 				children = new ArrayList<INode>(DEFAULT_FILES_PER_DIRECTORY);
 			}
@@ -1457,37 +1096,51 @@ public class INodeDirectory extends INodeWithAdditionalFields
 	}
 	
 	public void addBlockNVRAM(final INode node, int location) {
-			int last_position = 0;
-			int inode_num = 0; // except root
-			int commit = 1;
+		int last_position = 0;
+		int inode_num = 0; // except root
+		int commit = 1;
 
-			try {
-				//int position = 0;
-//				if (this.getId() == INodeId.ROOT_INODE_ID) {
-//					position = NativeIO.putIntToNVRAM(4096, location, 0, 0);
-//				} else {
-//
-//					position = NativeIO.putIntToNVRAM(4096, location, 1, 0);
-//				}
+		// LOG.info("[WONKI == addBlockNVRAM] : target " + node.getLocalName() +
+		// " location = " + location );
+		if (location == -1) {
+			LOG.info("addBlockNVRAM error");
+		}
+		try {
+			FSImageSerialization.writeINodeFile(node.asFile(), location,
+					((INodeFile) node).isUnderConstruction(), 12, 1);
+//			if(((INodeFile) node).isUnderConstruction() == true) {
+//			NativeIO.putIntTest(FSDirectory.nvramAddress, 2, location + 356);
+//			}
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			LOG.info("ERROR = " + e.toString() + "Message =" + e.getMessage());
+		}
 
-//				if (node.isFile()) { // file 0 , directory 1
+	}
 
-//					position = NativeIO.putIntToNVRAM(4096, location, 0, position);
-					FSImageSerialization.writeINodeFile(node.asFile(), location,
-							((INodeFile) node).isUnderConstruction(), 8, 1);
-//				} else if (node.isDirectory()) {
-//					position = NativeIO.putIntToNVRAM(4096, location, 1, position);
-//					position = FSImageSerialization.writeINodeDirectory(node.asDirectory(), location, position);			
-//				}
-					//mmap use
-				//NativeIO.putIntToNVRAM(4096, location, commit, 4092);
-				NativeIO.putIntTest(FSDirectory.nvramAddress, commit, location + 4092);
-
-			} catch (IOException e) {
-				// TODO Auto-generated catch block
-				LOG.info("ERROR = " + e.toString() + "Message =" + e.getMessage());
+	public int addChildrenInDirectory(int location, int children_offset, FSDirectory fsd) {
+		int commit = 1;
+		int success = 0;
+		try {
+			int child_num = NativeIO.readIntTest(FSDirectory.nvramAddress, location + 4092 - 4);
+			if (child_num == 1021) {
+				int next_dir = NativeIO.readIntTest(FSDirectory.nvramAddress, location + 4092 - 8);
+				if (next_dir == 0) {
+					next_dir = allocateNewSpace(fsd);
+					NativeIO.putIntTest(FSDirectory.nvramAddress, next_dir, location + 4092 - 8);
+				} 			
+				return addChildrenInDirectory(next_dir, children_offset, fsd);
 			}
-
+			int next_location = 4 * child_num;
+			NativeIO.putIntTest(FSDirectory.nvramAddress, children_offset, location + next_location);
+			NativeIO.putIntTest(FSDirectory.nvramAddress, child_num + 1, location + 4092 - 4);
+			NativeIO.putIntTest(FSDirectory.nvramAddress, commit, location + 4092);
+			success = 1;
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			LOG.info("ERROR = " + e.toString() + "Message =" + e.getMessage());
+		}
+		return success;
 	}
   
   private void addChild(final INode node, final int insertionPoint) {

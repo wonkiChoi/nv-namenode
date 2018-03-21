@@ -45,11 +45,13 @@ public class EditLogFileOutputStream extends EditLogOutputStream {
   private static final Log LOG = LogFactory.getLog(EditLogFileOutputStream.class);
   public static final int MIN_PREALLOCATION_LENGTH = 1024 * 1024;
 
+  private boolean nvram_enabled;
   private File file;
   private FileOutputStream fp; // file stream for storing edit logs
   private FileChannel fc; // channel of the file stream for sync
   private EditsDoubleBuffer doubleBuf;
   static final ByteBuffer fill = ByteBuffer.allocateDirect(MIN_PREALLOCATION_LENGTH);
+  static final ByteBuffer fill_nvram = ByteBuffer.allocateDirect(8);
   private boolean shouldSyncWritesAndSkipFsync = false;
 
   private static boolean shouldSkipFsyncForTests = false;
@@ -78,7 +80,7 @@ public class EditLogFileOutputStream extends EditLogOutputStream {
     shouldSyncWritesAndSkipFsync = conf.getBoolean(
             DFSConfigKeys.DFS_NAMENODE_EDITS_NOEDITLOGCHANNELFLUSH,
             DFSConfigKeys.DFS_NAMENODE_EDITS_NOEDITLOGCHANNELFLUSH_DEFAULT);
-
+    nvram_enabled = conf.getBoolean(DFSConfigKeys.DFS_NAME_NVRAM, DFSConfigKeys.DFS_NAME_NVRAM_DEFAULT);
     file = name;
     doubleBuf = new EditsDoubleBuffer(size);
     RandomAccessFile rp;
@@ -200,7 +202,11 @@ public class EditLogFileOutputStream extends EditLogOutputStream {
       LOG.info("Nothing to flush");
       return;
     }
-    preallocate(); // preallocate file if necessary
+    if(this.nvram_enabled) {
+    preallocate(this.nvram_enabled); // preallocate file if necessary
+    } else {
+    preallocate();
+    }
     doubleBuf.flushTo(fp);
     if (durable && !shouldSkipFsyncForTests && !shouldSyncWritesAndSkipFsync) {
       fc.force(false); // metadata updates not needed
@@ -238,6 +244,30 @@ public class EditLogFileOutputStream extends EditLogOutputStream {
       		"the edit log (offset " + oldSize + ")");
     }
   }
+  
+  private void preallocate(boolean nvram_enabled) throws IOException {
+	    long position = fc.position();
+	    long size = fc.size();
+	    int bufSize = doubleBuf.getReadyBuf().getLength();
+	    long need = bufSize - (size - position);
+	    if (need <= 0) {
+	      return;
+	    }
+	    long oldSize = size;
+	    long total = 0;
+//	    long fillCapacity = fill_nvram.capacity();
+//	    while (need > 0) {
+//	    	fill_nvram.position(0);
+//	      IOUtils.writeFully(fc, fill_nvram, size);
+//	      need -= fillCapacity;
+//	      size += fillCapacity;
+//	      total += fillCapacity;
+//	    }
+	    if(LOG.isDebugEnabled()) {
+	      LOG.debug("Preallocated " + total + " bytes at the end of " +
+	      		"the edit log (offset " + oldSize + ")");
+	    }
+	  }
 
   /**
    * Returns the file associated with this stream.
