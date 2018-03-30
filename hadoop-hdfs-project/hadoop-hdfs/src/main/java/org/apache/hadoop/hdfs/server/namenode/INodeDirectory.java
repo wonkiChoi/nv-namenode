@@ -998,12 +998,7 @@ public class INodeDirectory extends INodeWithAdditionalFields
 //				LOG.info("[WONKI : new_offset : " + new_offset);
 				int nvramAddrIdx = new_offset / GRANUL_NVRAM; // calculate idx for nvramAddress, allocate idx: 0 in root directory creation
 //				LOG.info("[WONKI : nvramAddrIdx " + nvramAddrIdx);
-				if (nvramAddrIdx == 1) {
-					LOG.info("nvramAddrIdx is 1");
-				}
-				if (nvramAddrIdx == 2) {
-					LOG.info("nvramAddrIdx is 2");
-				}
+
 				if (FSDirectory.nvramAddress[nvramAddrIdx] == 0) {
 //					LOG.info("[WONKI : not possible?]");
 					FSDirectory.nvramAddress[nvramAddrIdx] = NativeIO.ReturnNVRAMAddress(GRANUL_NVRAM, 4096 + (GRANUL_NVRAM * nvramAddrIdx));
