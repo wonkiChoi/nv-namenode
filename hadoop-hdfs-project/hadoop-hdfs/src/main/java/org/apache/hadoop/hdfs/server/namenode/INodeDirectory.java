@@ -1004,9 +1004,6 @@ public class INodeDirectory extends INodeWithAdditionalFields
 					FSDirectory.nvramAddress[nvramAddrIdx] = NativeIO.ReturnNVRAMAddress(GRANUL_NVRAM, 4096 + (GRANUL_NVRAM * nvramAddrIdx));
 //					LOG.info("[WONKI : possbile?]");
 				}
-//				for(int i=0; i < 10; i++){
-//					LOG.info("list = " + FSDirectory.nvramAddress[i]);
-//				}
 				fsd.NVramMap.put(node.getLocalName(), new_offset); //MVramMap include absolute address
 				
 				node.setParent(this);
