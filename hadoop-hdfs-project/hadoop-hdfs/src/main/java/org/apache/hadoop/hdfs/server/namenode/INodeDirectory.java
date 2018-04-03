@@ -706,9 +706,9 @@ public class INodeDirectory extends INodeWithAdditionalFields
 					LOG.info("WONKI : This error too");
 				}
 				result = removeChildinDirectory(nvram_enabled, dir_location, location, fsd);
-				if (fsd.directoryCache.get(this.getId()) != null) {
-					fsd.directoryCache.get(this.getId()).remove((Integer) location);
-				}
+//				if (fsd.directoryCache.get(this.getId()) != null) {
+//					fsd.directoryCache.get(this.getId()).remove((Integer) location);
+//				}
 			}
 			// LOG.info("[WONKI == removeChild] : Nvrammap remove = " +
 			// child.getLocalName() + " location = " + location);

@@ -339,9 +339,9 @@ public class INodesInPath {
 						if (temp == null) {
 							location = -1;
 						} else {
-							if (temp.size() == 1) {
-								location = temp.get(0);
-							} else {
+//							if (temp.size() == 1) {
+//								location = temp.get(0);
+//							} else {
 							for (int k = 0; k < temp.size(); k++) {
 								if (NativeIO.readLongTest(FSDirectory.nvramAddress, temp.get(k)) == curNode
 										.asDirectory().getId()) {
@@ -349,7 +349,7 @@ public class INodesInPath {
 									break;
 								}
 							}
-							}
+							//}
 						}
 
 						if (location == 0 || location == -1) {

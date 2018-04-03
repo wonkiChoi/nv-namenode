@@ -220,24 +220,24 @@ class FSDirStatAndListingOp {
 					}
 				}
 				} else {
-					ArrayList<Integer> child = fsd.directoryCache.get(dirInode.getId());
-					if (child != null) {
-						Iterator<Integer> iter = child.iterator();
-						listing = new HdfsFileStatus[child.size()];
-
-						while (iter.hasNext()) {
-							INode cur = dirInode.getChild(dirInode.getLocalNameBytes(), Snapshot.CURRENT_STATE_ID,
-									fsd.nvram_enabled, iter.next());
-							if (cur != null) {
-								byte curPolicy = isSuperUser && !cur.isSymlink() ? cur.getLocalStoragePolicyID()
-										: BlockStoragePolicySuite.ID_UNSPECIFIED;
-								listing[listingCnt] = createFileStatus(fsd, src, cur.getLocalNameBytes(), cur,
-										needLocation, getStoragePolicyID(curPolicy, parentStoragePolicy), snapshot,
-										isRawPath, iip);
-								listingCnt++;
-							}
-						}
-					} else {
+//					ArrayList<Integer> child = fsd.directoryCache.get(dirInode.getId());
+//					if (child != null) {
+//						Iterator<Integer> iter = child.iterator();
+//						listing = new HdfsFileStatus[child.size()];
+//
+//						while (iter.hasNext()) {
+//							INode cur = dirInode.getChild(dirInode.getLocalNameBytes(), Snapshot.CURRENT_STATE_ID,
+//									fsd.nvram_enabled, iter.next());
+//							if (cur != null) {
+//								byte curPolicy = isSuperUser && !cur.isSymlink() ? cur.getLocalStoragePolicyID()
+//										: BlockStoragePolicySuite.ID_UNSPECIFIED;
+//								listing[listingCnt] = createFileStatus(fsd, src, cur.getLocalNameBytes(), cur,
+//										needLocation, getStoragePolicyID(curPolicy, parentStoragePolicy), snapshot,
+//										isRawPath, iip);
+//								listingCnt++;
+//							}
+//						}
+//					} else {
 						location = dirInode.nvram_location;
 						if (location == 0) {
 							LOG.info("dir error");
@@ -285,12 +285,12 @@ class FSDirStatAndListingOp {
 								}
 						}
 
-						DirectoryCacheMember cm = new DirectoryCacheMember(dirInode.getLocalName(), child_int , dirInode.getId());
-						if(fsd.directoryCache.size() == 1000) {
-							fsd.directoryCache.pop();
-						}
-						fsd.directoryCache.enqueue(cm);
-					}
+//						DirectoryCacheMember cm = new DirectoryCacheMember(dirInode.getLocalName(), child_int , dirInode.getId());
+//						if(fsd.directoryCache.size() == 1000) {
+//							fsd.directoryCache.pop();
+//						}
+//						fsd.directoryCache.enqueue(cm);
+//					}
 				}
 				return new DirectoryListing(listing, 0);		
 			} else {
