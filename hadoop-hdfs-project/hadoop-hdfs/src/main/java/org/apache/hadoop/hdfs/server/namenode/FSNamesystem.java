@@ -4539,7 +4539,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     long time = now();
 		if (this.dir.nvram_enabled) {
 			if (pendingFile.isUnderConstruction() == true) {
-				LOG.info("File Complete = " + pendingFile.getLocalName());
+//				LOG.info("File Complete = " + pendingFile.getLocalName());
 				NativeIO.putIntTest(FSDirectory.nvramAddress, 2,
 						((INodeWithAdditionalFields) pendingFile).nvram_location + 356);
 			}

@@ -339,12 +339,16 @@ public class INodesInPath {
 						if (temp == null) {
 							location = -1;
 						} else {
+							if (temp.size() == 1) {
+								location = temp.get(0);
+							} else {
 							for (int k = 0; k < temp.size(); k++) {
 								if (NativeIO.readLongTest(FSDirectory.nvramAddress, temp.get(k)) == curNode
 										.asDirectory().getId()) {
 									location = temp.get(k);
 									break;
 								}
+							}
 							}
 						}
 
@@ -355,12 +359,14 @@ public class INodesInPath {
 							if (fsd.INode_Cache == null ) {
 								fsd.INode_Cache = new INodeCache<Long, INode>(1000);
 							}
+
 							curNode = fsd.INode_Cache.get(id);
 							if(curNode == null) {
 								curNode = dir.getChild(childName, isSnapshot ? snapshotId : CURRENT_STATE_ID,
 										nvram_enabled, location);
 								fsd.INode_Cache.put(id, curNode);
-							}
+//								LOG.info("CACHE INPUT = " + curNode.getLocalName());
+							} 
 						}
 					} catch (NativeIOException e) {
 						LOG.info("nativeIOException occur");

@@ -643,7 +643,7 @@ public class INodeDirectory extends INodeWithAdditionalFields
 					for (int i = 0; i < child_num; i++) {
 						int record = i*4;
 						int index = NativeIO.readIntTest(FSDirectory.nvramAddress,
-									location + 936 + record);
+									location + 952 + record);
 						int fir_dir = NativeIO.readIntTest(FSDirectory.nvramAddress, index + 8);
 						//LOG.info("[WONKI == removeChild] : dir  ::" + index + " cur = " + cur.getLocalName());
 						if (fir_dir == 1) {
@@ -766,11 +766,11 @@ public class INodeDirectory extends INodeWithAdditionalFields
 			for (int i = 0; i < child_num; i++) {
 				int record = i*4;
 				int index = NativeIO.readIntTest(FSDirectory.nvramAddress,
-							location + 936 + record);
+							location + 952 + record);
 				if(index == target_offset) {
-					int offset = NativeIO.readIntTest(FSDirectory.nvramAddress, location + 936 + 4*(child_num-1));
-					NativeIO.putIntTest(FSDirectory.nvramAddress, offset , location + 936 + record);
-					NativeIO.putIntTest(FSDirectory.nvramAddress, 0, location + 936 + 4*(child_num-1));
+					int offset = NativeIO.readIntTest(FSDirectory.nvramAddress, location + 952 + 4*(child_num-1));
+					NativeIO.putIntTest(FSDirectory.nvramAddress, offset , location + 952 + record);
+					NativeIO.putIntTest(FSDirectory.nvramAddress, 0, location + 952 + 4*(child_num-1));
 					NativeIO.putIntTest(FSDirectory.nvramAddress, child_num - 1, location + 4092 - 4);
 					break;
 				}
@@ -1023,12 +1023,16 @@ public class INodeDirectory extends INodeWithAdditionalFields
 					if(directory_location == 0) {
 						try {
 						ArrayList<Integer> temp = fsd.NVramMap.get(this.getLocalName());
+						if (temp.size() == 1) {
+							directory_location = temp.get(0);
+						} else {
 						for (int k = 0; k < temp.size(); k++) {
 							if (NativeIO.readLongTest(FSDirectory.nvramAddress,
 									temp.get(k) + 316) == this.getId()) {
 								directory_location = temp.get(k);
 								break;
 							}
+						}
 						}
 						} catch (NativeIOException e) {
 							LOG.info("nativeException occured");
@@ -1040,9 +1044,13 @@ public class INodeDirectory extends INodeWithAdditionalFields
 				}
 				
 				if (node.isFile()) { // file 0 , directory 1
+				  long timeStart = System.currentTimeMillis();
 					position = NativeIO.putIntTest(FSDirectory.nvramAddress, 0, position);
 					position = FSImageSerialization.writeINodeFile(node.asFile(), new_offset,
 							((INodeFile) node).isUnderConstruction(), position, 0);	
+					long timeEnd = System.currentTimeMillis();
+					fsd.addTime_sec = fsd.addTime_sec + (timeEnd - timeStart) ;
+					LOG.info("[checking time : file write ] = " + fsd.addTime_sec);
 					if (this.getId() == INodeId.ROOT_INODE_ID) {
 						if (children_location == null) {
 							children_location = new ArrayList<Integer>(DEFAULT_FILES_PER_DIRECTORY);
@@ -1051,7 +1059,12 @@ public class INodeDirectory extends INodeWithAdditionalFields
 						this.child_num = this.child_num + 1;
 						
 					} else {
-						fsd.numINode = NativeIO.putChildrenInDirectory(FSDirectory.nvramAddress, new_offset, directory_location, fsd.numINode);
+						//fsd.numINode = NativeIO.putChildrenInDirectory(FSDirectory.nvramAddress, new_offset, directory_location, fsd.numINode);
+						long timeputStart = System.currentTimeMillis();
+						fsd.numINode = NativeIO.putChildrenInDirectoryFast(FSDirectory.nvramAddress, new_offset, directory_location, fsd.numINode);
+						long timeputEnd = System.currentTimeMillis();
+						fsd.addTime_third = fsd.addTime_third + (timeputEnd - timeputStart);
+						LOG.info("[checking time : putchildren ] = " + fsd.addTime_third);
 					}
 				} else if (node.isDirectory()) {
 					position = NativeIO.putIntTest(FSDirectory.nvramAddress, 1, position);
@@ -1063,7 +1076,8 @@ public class INodeDirectory extends INodeWithAdditionalFields
 						children_location.add(new_offset);
 						this.child_num = this.child_num + 1;
 					} else {				
-						fsd.numINode = NativeIO.putChildrenInDirectory(FSDirectory.nvramAddress, new_offset, directory_location, fsd.numINode);
+						//fsd.numINode = NativeIO.putChildrenInDirectory(FSDirectory.nvramAddress, new_offset, directory_location, fsd.numINode);
+						fsd.numINode = NativeIO.putChildrenInDirectoryFast(FSDirectory.nvramAddress, new_offset, directory_location, fsd.numINode);
 					}
 				}
 				position = NativeIO.putIntTest(FSDirectory.nvramAddress, commit, new_offset + 4092);

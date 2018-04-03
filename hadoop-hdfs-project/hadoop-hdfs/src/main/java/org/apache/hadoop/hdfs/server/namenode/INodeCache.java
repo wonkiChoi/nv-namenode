@@ -16,6 +16,7 @@ public class INodeCache<K, V> extends LinkedHashMap<K,V> {
 	private int lruSize;
 	
 	public INodeCache(int size) {
+		super(size, 0.75f, true);
 		this.lruSize = size;
 	}
 

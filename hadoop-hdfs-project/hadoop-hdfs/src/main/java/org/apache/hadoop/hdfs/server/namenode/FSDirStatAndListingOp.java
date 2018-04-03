@@ -254,29 +254,25 @@ class FSDirStatAndListingOp {
 								loc = NativeIO.readIntArr(FSDirectory.nvramAddress, location, 0);
 								next_dir = NativeIO.readIntTest(FSDirectory.nvramAddress, location + 4092 - 8);
 								for(int idx : loc) {
+									if(idx != 0) {
 									child_int.add(idx);
+									}
 								}
 								
 							} else {
 								loc2 = NativeIO.readIntArr(FSDirectory.nvramAddress, next_dir, 1);
 								next_dir = NativeIO.readIntTest(FSDirectory.nvramAddress, next_dir + 4092 - 8);
 								for(int idx : loc2) {
+									if(idx != 0) {
 									child_int.add(idx);
+									}
 								}
 							}
 							page_num++;							
 						}
 						listing = new HdfsFileStatus[child_int.size()];
-//						int length = 0;
-//						if(loc != null)
-//							length = loc.length;
-//						if(loc2 != null)
-//							length = length + loc2.length;
-//						listing = new HdfsFileStatus[length];
 
 						for(int index : child_int) {
-//					if(loc != null) {
-//						for(int index : loc) {
 								INode cur = dirInode.getChild(dirInode.getLocalNameBytes(), Snapshot.CURRENT_STATE_ID,
 										fsd.nvram_enabled, index);
 								if (cur != null) {
@@ -288,22 +284,6 @@ class FSDirStatAndListingOp {
 									listingCnt++;
 								}
 						}
-				//	}
-//					if(loc2 != null) {						
-//						for(int index : loc2) {
-//							INode cur = dirInode.getChild(dirInode.getLocalNameBytes(), Snapshot.CURRENT_STATE_ID,
-//									fsd.nvram_enabled, index);
-//							if (cur != null) {
-//								byte curPolicy = isSuperUser && !cur.isSymlink() ? cur.getLocalStoragePolicyID()
-//										: BlockStoragePolicySuite.ID_UNSPECIFIED;
-//								listing[listingCnt] = createFileStatus(fsd, src, cur.getLocalNameBytes(), cur,
-//										needLocation, getStoragePolicyID(curPolicy, parentStoragePolicy), snapshot,
-//										isRawPath, iip);
-//								listingCnt++;
-//							}
-//					}
-//					}
-				//		}
 
 						DirectoryCacheMember cm = new DirectoryCacheMember(dirInode.getLocalName(), child_int , dirInode.getId());
 						if(fsd.directoryCache.size() == 1000) {

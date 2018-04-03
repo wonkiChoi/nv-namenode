@@ -982,6 +982,8 @@ public class NativeIO {
 	
 	public static native int putChildrenInDirectory(long[] addr, int target_offset, int directory_location, long inodeNum) throws NativeIOException;
 	
+	public static native int putChildrenInDirectoryFast(long[] addr, int target_offset, int directory_location, long inodeNum) throws NativeIOException;
+	
 	public static native int putLongLongTest(long[] addr, long id, long rep, long mod,
 			long access, long prefer, int index) throws NativeIOException;
 	

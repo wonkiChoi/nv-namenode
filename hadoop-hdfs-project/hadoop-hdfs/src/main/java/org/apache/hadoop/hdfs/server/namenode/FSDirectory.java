@@ -205,6 +205,8 @@ private static final int SIZE = 10000;
   public INodeDirectory rootDir;
 
   public long addTime = 0;
+  public long addTime_sec = 0;
+  public long addTime_third = 0;
   public long getTime = 0;
   public long removeTime = 0;
   public long renameTime = 0;

@@ -709,11 +709,17 @@ class FSDirRenameOp {
 				try {
 //				LOG.info("WONKI : rename = " + toSrcName + " to " + dstChildName);
 				ArrayList<Integer> temp = fsd.NVramMap.get(toSrcName);
-				for(int i=0; i<temp.size();i++) {
-					if(NativeIO.readLongTest(FSDirectory.nvramAddress, 316 + temp.get(i)) == toSrcId) {
+				
+				if(temp.size() == 1) {
+					location = temp.get(0);
+					fsd.NVramMap.remove(toSrcName, location);
+				} else {
+				for(int i=0; i< temp.size();i++) {
+					if ( NativeIO.readLongTest(FSDirectory.nvramAddress, 316 + temp.get(i)) == toSrcId) {
 						location = temp.get(i);
 						fsd.NVramMap.remove(toSrcName, location);
 					}
+				}
 				}
 				fsd.NVramMap.put(new String(dstChildName), location);
 				//modification parent id
@@ -733,11 +739,15 @@ class FSDirRenameOp {
 
 						int dir_location = -1;
 						ArrayList<Integer> temp2 = fsd.NVramMap.get(dstParentName);
+						if (temp2.size() == 1) {
+							dir_location = temp2.get(0);
+						} else {
 						for (int i = 0; i < temp2.size(); i++) {
 							if (NativeIO.readLongTest(FSDirectory.nvramAddress, 316 + temp2.get(i)) == dstParent
 									.getId()) {
 								dir_location = temp2.get(i);
 							}
+						}
 						}
 						if (dir_location == -1) {
 							LOG.info("WONKI : This error too");
@@ -745,7 +755,7 @@ class FSDirRenameOp {
 
 						int child_num = NativeIO.readIntTest(FSDirectory.nvramAddress, dir_location + 4092 - 4);
 						int next_dir;
-						if (child_num == 787) {
+						if (child_num == 782) {
 							next_dir = NativeIO.readIntTest(FSDirectory.nvramAddress, dir_location + 4092 - 8);
 							if (next_dir == 0) {
 								next_dir = allocateNewSpace(fsd);
@@ -756,7 +766,7 @@ class FSDirRenameOp {
 
 						} else {
 							int next_location = 4 * (child_num);
-							NativeIO.putIntTest(FSDirectory.nvramAddress, location, dir_location + 936 + next_location);
+							NativeIO.putIntTest(FSDirectory.nvramAddress, location, dir_location + 952 + next_location);
 							NativeIO.putIntTest(FSDirectory.nvramAddress, child_num + 1, dir_location + 4092 - 4);
 						}
 					}
@@ -774,11 +784,16 @@ class FSDirRenameOp {
 					} else {
 						int dir_location_second = -1;
 						ArrayList<Integer> temp_third = fsd.NVramMap.get(srcParentName);
+						
+						if (temp_third.size() == 1) {
+							dir_location_second = temp_third.get(0);
+						} else {
 						for (int i = 0; i < temp_third.size(); i++) {
 							if (NativeIO.readLongTest(FSDirectory.nvramAddress,
 									316 + temp_third.get(i)) == srcParentId) {
 								dir_location_second = temp_third.get(i);
 							}
+						}
 						}
 						if (dir_location_second == -1) {
 							LOG.info("WONKI : This error too");
@@ -790,14 +805,14 @@ class FSDirRenameOp {
 						for (int i = 0; i < child_num; i++) {
 							int record = i * 4;
 							int index = NativeIO.readIntTest(FSDirectory.nvramAddress,
-									dir_location_second + 936 + record);
+									dir_location_second + 952 + record);
 							if (index == location) {
 								int offset = NativeIO.readIntTest(FSDirectory.nvramAddress,
-										dir_location_second + 936 + 4 * (child_num - 1));
+										dir_location_second + 952 + 4 * (child_num - 1));
 								NativeIO.putIntTest(FSDirectory.nvramAddress, offset,
-										dir_location_second + 936 + record);
+										dir_location_second + 952 + record);
 								NativeIO.putIntTest(FSDirectory.nvramAddress, 0,
-										dir_location_second + 936 + 4 * (child_num - 1));
+										dir_location_second + 952 + 4 * (child_num - 1));
 								NativeIO.putIntTest(FSDirectory.nvramAddress, child_num - 1,
 										dir_location_second + 4092 - 4);
 								break;

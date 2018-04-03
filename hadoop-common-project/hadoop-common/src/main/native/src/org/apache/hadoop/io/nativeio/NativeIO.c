@@ -237,6 +237,42 @@ static int addChildrenInDirectory(jlong* addr, jint directory_location,
 	return inode_num;
 
 }
+
+static int addChildrenInDirectoryFast(jlong* addr, jint directory_location,
+		jint target_offset, jint initLocation, jint inodeNum) {
+	int commit = 1;
+	int success = 0;
+	int child_num;
+
+	int quo = directory_location / NVM_GRAN;
+	int cal_index = directory_location % NVM_GRAN;
+	int quo_sec = initLocation / NVM_GRAN;
+	int sec_index = initLocation / NVM_GRAN;
+	void * dmiBuffer = (void *) addr[quo];
+	void * dmiBuffer_sec = (void *) addr[quo_sec];
+	int inode_num = inodeNum;
+
+	memcpy(&child_num, dmiBuffer + cal_index + 4092 - 4, sizeof(child_num));
+	if (child_num == 1021) {
+		int next_dir;
+		memcpy(&next_dir, dmiBuffer + cal_index + 4092 - 8, sizeof(next_dir));
+		if (next_dir == 0) {
+			inode_num = inode_num + 1;
+			next_dir = 4096 + 4096 * (inode_num - 1);
+			//next_dir = 4096 + 4096 * inodeNum;
+			memcpy(dmiBuffer + cal_index + 4092 - 8, &next_dir, sizeof(next_dir));
+			memcpy(dmiBuffer_sec + sec_index + 4092 - 12, &next_dir, sizeof(next_dir));
+		}
+		return addChildrenInDirectoryFast(addr, next_dir, target_offset, initLocation, inode_num);
+		//return addChildrenInDirectoryFast(addr, next_dir, target_offset, initLocation, inodeNum + 1);
+	}
+	int next_location = 4 * child_num;
+	memcpy(dmiBuffer + cal_index + next_location, &target_offset, sizeof(target_offset));
+	child_num = child_num + 1;
+	memcpy(dmiBuffer + cal_index + 4092 - 4, &child_num, sizeof(child_num));
+	return inode_num;
+
+}
 /*
  * Compatibility mapping for fadvise flags. Return the proper value from fnctl.h.
  * If the value is not known, return the argument unchanged.
@@ -1449,6 +1485,112 @@ Java_org_apache_hadoop_io_nativeio_NativeIO_putChildrenInDirectory(JNIEnv * env,
 	  return inode_num;
 }
 
+//JNIEXPORT jint JNICALL
+//Java_org_apache_hadoop_io_nativeio_NativeIO_putChildrenInDirectoryFast(JNIEnv * env, jclass clazz, jlongArray addr, jint target_offset,
+//		 jint directory_location, jlong inodeNum)
+//{
+//
+//	  jlong * nvram_addr = (*env)->GetLongArrayElements(env, addr, 0);
+//	  int quo = directory_location / NVM_GRAN;
+//	  int cal_directory_location = directory_location % NVM_GRAN;
+//
+//	  void * dmiBuffer = (void *) nvram_addr[quo];
+//	  void * dmiBuffer_init = (void *) nvram_addr[0];
+//	  int child_num;
+//
+//		int next_dir;
+//		int success = 1;
+//		int inode_num = inodeNum;
+//		int init_location= directory_location;
+//		int last_page = 0;
+//
+//		/* pick first page's last page info*/
+//		memcpy(&last_page, dmiBuffer + cal_directory_location + 4092 - 12, sizeof(last_page));
+//
+//		if (last_page == 0) {
+//			memcpy(&child_num, dmiBuffer + cal_directory_location + 4092 - 4, sizeof(child_num));
+//			if (child_num == 782) {
+//			memcpy(&next_dir, dmiBuffer + cal_directory_location + 4092 - 8,
+//					sizeof(next_dir));
+//			if (next_dir == 0) {
+//				inode_num = inode_num + 1;
+//				next_dir = 4096 + 4096 * (inode_num - 1);
+//				memcpy(dmiBuffer + cal_directory_location + 4092 - 8, &next_dir,
+//						sizeof(next_dir));
+//				/* last page info update */
+//				memcpy(dmiBuffer + cal_directory_location + 4092 - 12,
+//						&next_dir, sizeof(next_dir));
+//			}
+//			inode_num = addChildrenInDirectoryFast(nvram_addr, next_dir, target_offset, init_location, inode_num);
+//			//inode_num = addChildrenInDirectoryFast(nvram_addr, next_dir, target_offset, init_location, inode_num + 1);
+//		}  else { // last page = 0 & child_num < 786
+//			int next_location = 4 * (child_num);
+//			memcpy(dmiBuffer + cal_directory_location + 952 + next_location,
+//					&target_offset, sizeof(target_offset));
+//			child_num = child_num + 1;
+//			memcpy(dmiBuffer + cal_directory_location + 4092 - 4, &child_num,
+//					sizeof(child_num));
+//		}
+//	} else {
+//		inode_num = addChildrenInDirectoryFast(nvram_addr, last_page, target_offset, init_location, inode_num);
+//	}
+//
+//
+//		(*env)->ReleaseLongArrayElements(env, addr, nvram_addr, 0);
+//	  return inode_num;
+//}
+
+JNIEXPORT jint JNICALL
+Java_org_apache_hadoop_io_nativeio_NativeIO_putChildrenInDirectoryFast(JNIEnv * env, jclass clazz, jlongArray addr, jint target_offset,
+		 jint directory_location, jlong inodeNum)
+{
+
+	  jlong * nvram_addr = (*env)->GetLongArrayElements(env, addr, 0);
+	  int quo = directory_location / NVM_GRAN;
+	  int cal_directory_location = directory_location % NVM_GRAN;
+
+	  void * dmiBuffer = (void *) nvram_addr[quo];
+	  void * dmiBuffer_init = (void *) nvram_addr[0];
+	  int child_num;
+
+		int next_dir;
+		int success = 1;
+		int inode_num = inodeNum;
+		int init_location= directory_location;
+		int last_page = 0;
+
+		/* pick first page's last page info*/
+		memcpy(&last_page, dmiBuffer + cal_directory_location + 4092 - 12, sizeof(last_page));
+
+		if (last_page == 0) {
+			memcpy(&child_num, dmiBuffer + cal_directory_location + 4092 - 4, sizeof(child_num));
+			if (child_num == 782) {
+				inode_num = inode_num + 1;
+				next_dir = 4096 + 4096 * (inode_num - 1);
+				memcpy(dmiBuffer + cal_directory_location + 4092 - 8, &next_dir,
+						sizeof(next_dir));
+				/* last page info update */
+				memcpy(dmiBuffer + cal_directory_location + 4092 - 12,
+						&next_dir, sizeof(next_dir));
+
+				inode_num = addChildrenInDirectoryFast(nvram_addr, next_dir, target_offset, init_location, inode_num);
+		}  else { // last page = 0 & child_num < 786
+			int next_location = 4 * (child_num);
+			memcpy(dmiBuffer + cal_directory_location + 952 + next_location,
+					&target_offset, sizeof(target_offset));
+			child_num = child_num + 1;
+			memcpy(dmiBuffer + cal_directory_location + 4092 - 4, &child_num,
+					sizeof(child_num));
+		}
+	} else {
+		inode_num = addChildrenInDirectoryFast(nvram_addr, last_page, target_offset, init_location, inode_num);
+	}
+
+
+		(*env)->ReleaseLongArrayElements(env, addr, nvram_addr, 0);
+	  return inode_num;
+}
+
 JNIEXPORT jint JNICALL
 Java_org_apache_hadoop_io_nativeio_NativeIO_putLongLongTest(JNIEnv * env, jclass clazz, jlongArray addr, jlong id,
 		 jlong rep,  jlong mod,  jlong access,  jlong prefer, jint index)
@@ -1542,9 +1684,9 @@ Java_org_apache_hadoop_io_nativeio_NativeIO_putIntBATest(JNIEnv * env, jclass cl
 //	  fprintf(fp, "putIntBATest cal_index :%d\n" , cal_index);
 //	  fprintf(fp, "putIntBATest dmiBuffer :%ld\n" , nvram_addr[quo]);
 //	  fclose(fp);
-	  char nativeStr[200] = {0, };
+	  char nativeStr[192] = {0, };
 	  int return_index = 300;
-		int remains = 200;
+		int remains = 192;
 	  int len = (*env)->GetArrayLength(env, data);
 	  jbyte * nativeBytes = (*env)->GetByteArrayElements(env, data, NULL);
 
@@ -1554,13 +1696,13 @@ Java_org_apache_hadoop_io_nativeio_NativeIO_putIntBATest(JNIEnv * env, jclass cl
 		char * src = (char *) nativeStr;
 	  memcpy(dmiBuffer + cal_index, &length, sizeof(length));
 
-//		while(remains >= 32) {
-//			storeu_32bytes((void *)dest , (void *)src);
-//			dest += 32;
-//			src += 32;
-//			remains-=32;
-//		}
-//
+		while(remains >= 32) {
+			storeu_32bytes((void *)dest , (void *)src);
+			dest += 32;
+			src += 32;
+			remains-=32;
+		}
+
 		while(remains >= 16) {
 			storeu_16bytes((void *)dest , (void *)src);
 			dest += 16;
@@ -1602,13 +1744,13 @@ Java_org_apache_hadoop_io_nativeio_NativeIO_putIntClientTest(JNIEnv * env, jclas
 		char * src = (char *) nativeStr;
 	  memcpy(dmiBuffer + cal_index, &length, sizeof(length));
 
-//		while(remains >= 32) {
-//			storeu_32bytes((void *)dest , (void *)src);
-//			dest += 32;
-//			src += 32;
-//			remains-=32;
-//		}
-//
+		while(remains >= 32) {
+			storeu_32bytes((void *)dest , (void *)src);
+			dest += 32;
+			src += 32;
+			remains-=32;
+		}
+
 		while(remains >= 16) {
 			storeu_16bytes((void *)dest , (void *)src);
 			dest += 16;
@@ -1739,22 +1881,24 @@ Java_org_apache_hadoop_io_nativeio_NativeIO_readIntArr(JNIEnv * env, 	jclass cla
 
 	memcpy(&child_num, dmiBuffer + cal_index + 4092 - 4, sizeof(child_num));
 	if (type == 0) { // first page
-		for (i = 0; i < child_num; i++) {
-			record_location = 4 * i;
-			memcpy(&mem, dmiBuffer + cal_index + 936 + record_location, sizeof(mem));
-			loc[total_num] = mem;
-			total_num++;
-		}
+		memcpy(&loc, dmiBuffer + cal_index + 952, sizeof(int) * child_num);
+//		for (i = 0; i < child_num; i++) {
+//			record_location = 4 * i;
+//			memcpy(&mem, dmiBuffer + cal_index + 936 + record_location, sizeof(mem));
+//			loc[total_num] = mem;
+//			total_num++;
+//		}
 	} else {
-		for (i = 0; i < child_num; i++) {
-			record_location = 4 * i;
-			memcpy(&mem, dmiBuffer + cal_index + record_location, sizeof(mem));
-			loc[total_num] = mem;
-			total_num++;
-		}
+		memcpy(&loc, dmiBuffer + cal_index, sizeof(int) * child_num);
+//		for (i = 0; i < child_num; i++) {
+//			record_location = 4 * i;
+//			memcpy(&mem, dmiBuffer + cal_index + record_location, sizeof(mem));
+//			loc[total_num] = mem;
+//			total_num++;
+//		}
 	}
-	intAR = (*env)->NewIntArray(env, total_num);
-	(*env)->SetIntArrayRegion(env, intAR, 0, total_num, loc);
+	intAR = (*env)->NewIntArray(env, child_num);
+	(*env)->SetIntArrayRegion(env, intAR, 0, child_num, loc);
 	(*env)->ReleaseLongArrayElements(env, addr, nvram_addr, 0);
 	//fclose(fp);
 	return intAR;
@@ -1857,10 +2001,10 @@ Java_org_apache_hadoop_io_nativeio_NativeIO_readIntBATest(JNIEnv * env, jclass c
 	void * dmiBuffer = (void *) nvram_addr[quo];
 	jbyteArray byteAR;
 	int length;
-	char ret[200] = {0, };
+	char ret[192] = {0, };
 //	FILE * fp;
 
-	int remains = 200;
+	int remains = 192;
 	char * dest = ret;
 	char * src = (char *)(dmiBuffer + cal_index + sizeof(length));
 	memcpy(&length, dmiBuffer + cal_index, sizeof(length));
@@ -1868,17 +2012,12 @@ Java_org_apache_hadoop_io_nativeio_NativeIO_readIntBATest(JNIEnv * env, jclass c
 //  fp = fopen("/home/skt_test/native_error_checking.txt","at");
 //  fprintf(fp, "1");
 //
-//	while(remains >= 32) {
-//		fprintf(fp, "2");
-//		loadu_32bytes((void *)dest , (void *)src);
-//		fprintf(fp, "3");
-//		dest += 32;
-//		fprintf(fp, "4");
-//		src += 32;
-//		fprintf(fp, "5");
-//		remains -= 32;
-//	}
-//	fprintf(fp, "6");
+	while (remains >= 32) {
+		loadu_32bytes((void *) dest, (void *) src);
+		dest += 32;
+		src += 32;
+		remains -= 32;
+	}
 
 	while(remains >= 16) {
 		loadu_16bytes((void *)dest , (void *)src);
@@ -1886,6 +2025,7 @@ Java_org_apache_hadoop_io_nativeio_NativeIO_readIntBATest(JNIEnv * env, jclass c
 		src += 16;
 		remains -= 16;
 	}
+
 	if(remains !=0) {
 		memcpy(dest, src, remains);
 	}
@@ -1913,6 +2053,13 @@ Java_org_apache_hadoop_io_nativeio_NativeIO_readIntClientTest(JNIEnv * env, jcla
 	char * dest = ret;
 	char * src = (char *)(dmiBuffer + cal_index + sizeof(length));
 	memcpy(&length, dmiBuffer + cal_index, sizeof(length));
+
+	while (remains >= 32) {
+		loadu_32bytes((void *) dest, (void *) src);
+		dest += 32;
+		src += 32;
+		remains -= 32;
+	}
 
 	while(remains >= 16) {
 		loadu_16bytes((void *)dest , (void *)src);
