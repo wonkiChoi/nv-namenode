@@ -209,7 +209,11 @@ private static final int SIZE = 10000;
   public long addTime_third = 0;
   public long getTime = 0;
   public long removeTime = 0;
+  public long removeTime_sec = 0;
+  public long removeTime_third = 0;
   public long renameTime = 0;
+  public long renameTime_sec = 0;
+  public long renameTime_third = 0;
   public int numINode;
   public INodeCache<Long,INode> INode_Cache = null;
  // public static long nvramAddress;
@@ -737,11 +741,11 @@ FSDirectory(FSNamesystem ns, Configuration conf, boolean nvram_enabled, boolean 
     INodesInPath newiip;
     writeLock();
     try {
-    	long time = System.currentTimeMillis();
+//    	long time = System.currentTimeMillis();
       newiip = addINode(existing, newNode, this.nvram_enabled);
-      long endtime = System.currentTimeMillis();
-      this.addTime = this.addTime + (endtime - time);
-      LOG.info("[checking Time ] addTime = " + this.addTime);
+//      long endtime = System.currentTimeMillis();
+//      this.addTime = this.addTime + (endtime - time);
+//      LOG.info("[checking Time ] addTime = " + this.addTime);
       
     } finally {
       writeUnlock();

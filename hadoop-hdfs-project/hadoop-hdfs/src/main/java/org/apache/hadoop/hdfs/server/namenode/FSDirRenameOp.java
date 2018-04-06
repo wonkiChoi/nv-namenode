@@ -674,181 +674,393 @@ class FSDirRenameOp {
       return removedNum;
     }
 
+//    boolean addSourceToDestination(long timestamp) {
+//      final INode dstParent = dstParentIIP.getLastINode();
+//      final byte[] dstChildName = dstIIP.getLastLocalName();
+//      String toSrcName = null;
+//      INode toSrc = null;
+//      String dstParentName = null;
+//      String srcParentName = null;
+//      long toSrcId = 0;
+//      long srcParentId = 0;
+//      INode srcParent = null;
+//			if (fsd.nvram_enabled) {
+//				toSrc = srcIIP.getLastINode();
+//				toSrcName = toSrc.getLocalName();
+//				toSrcId = toSrc.getId();
+//				dstParentName = dstParent.getLocalName();
+//				srcParent = srcParentIIP.getLastINode();
+//				srcParentName = srcParent.getLocalName();
+//				srcParentId = srcParent.getId();
+//			}
+//
+//      final INode toDst;
+//      if (withCount == null) {
+//        srcChild.setLocalName(dstChildName);
+//        toDst = srcChild;
+//      } else {
+//        withCount.getReferredINode().setLocalName(dstChildName);
+//        toDst = new INodeReference.DstReference(dstParent.asDirectory(),
+//            withCount, dstIIP.getLatestSnapshotId());
+//      }
+//			if (fsd.nvram_enabled) {
+//				/*Hashmap name modification*/
+//				int location = -1;
+//				try {
+////				LOG.info("WONKI : rename = " + toSrcName + " to " + dstChildName);
+//				ArrayList<Integer> temp = fsd.NVramMap.get(toSrcName);
+//				
+//				if(temp.size() == 1) {
+//					location = temp.get(0);
+//					fsd.NVramMap.remove(toSrcName, location);
+//				} else {
+//				for(int i=0; i< temp.size();i++) {
+//					if ( NativeIO.readLongTest(FSDirectory.nvramAddress, 316 + temp.get(i)) == toSrcId) {
+//						location = temp.get(i);
+//						fsd.NVramMap.remove(toSrcName, location);
+//					}
+//				}
+//				}
+//				fsd.NVramMap.put(new String(dstChildName), location);
+//				//modification parent id
+//				NativeIO.putLongTest(FSDirectory.nvramAddress, dstParent.getId(), location);
+//				NativeIO.putIntBATest(FSDirectory.nvramAddress, dstChildName.length, dstChildName, location  + 12);
+//				NativeIO.putLongTest(FSDirectory.nvramAddress, timestamp, location + 332);
+//				
+//					// new directory update
+//
+//					if (dstParent.getId() == INodeId.ROOT_INODE_ID) {
+//						if (((INodeDirectory) dstParent).children_location == null) {
+//							((INodeDirectory) dstParent).children_location = new ArrayList<Integer>(5);
+//						}
+//						((INodeDirectory) dstParent).children_location.add(location);
+//						((INodeDirectory) dstParent).child_num = ((INodeDirectory) dstParent).child_num + 1;
+//					} else {
+//
+//						int dir_location = -1;
+//						ArrayList<Integer> temp2 = fsd.NVramMap.get(dstParentName);
+//						if (temp2.size() == 1) {
+//							dir_location = temp2.get(0);
+//						} else {
+//						for (int i = 0; i < temp2.size(); i++) {
+//							if (NativeIO.readLongTest(FSDirectory.nvramAddress, 316 + temp2.get(i)) == dstParent
+//									.getId()) {
+//								dir_location = temp2.get(i);
+//							}
+//						}
+//						}
+//						if (dir_location == -1) {
+//							LOG.info("WONKI : This error too");
+//						}
+//
+//						int child_num = NativeIO.readIntTest(FSDirectory.nvramAddress, dir_location + 4092 - 4);
+//						int next_dir;
+//						if (child_num == 782) {
+//							next_dir = NativeIO.readIntTest(FSDirectory.nvramAddress, dir_location + 4092 - 8);
+//							if (next_dir == 0) {
+//								next_dir = allocateNewSpace(fsd);
+//								NativeIO.putIntTest(FSDirectory.nvramAddress, next_dir, dir_location + 4092 - 8);
+//							}
+//							// store next_dir location in current directory
+//							int success = addChildrenInDirectoryFast(next_dir, location, fsd);
+//
+//						} else {
+//							int next_location = 4 * (child_num);
+//							NativeIO.putIntTest(FSDirectory.nvramAddress, location, dir_location + 952 + next_location);
+//							NativeIO.putIntTest(FSDirectory.nvramAddress, child_num + 1, dir_location + 4092 - 4);
+//						}
+//					}
+//
+//				//old directory update
+//
+//					if (srcParent.getId() == INodeId.ROOT_INODE_ID) {
+//						((INodeDirectory) srcParent).child_num = ((INodeDirectory) srcParent).child_num - 1;
+//						for (int i = 0; i < ((INodeDirectory) srcParent).children_location.size(); i++) {
+//							if (((INodeDirectory) srcParent).children_location.get(i) == location) {
+//								((INodeDirectory) srcParent).children_location.remove(i);
+//								break;
+//							}
+//						}
+//					} else {
+//						int dir_location_second = -1;
+//						ArrayList<Integer> temp_third = fsd.NVramMap.get(srcParentName);
+//						
+//						if (temp_third.size() == 1) {
+//							dir_location_second = temp_third.get(0);
+//						} else {
+//						for (int i = 0; i < temp_third.size(); i++) {
+//							if (NativeIO.readLongTest(FSDirectory.nvramAddress,
+//									316 + temp_third.get(i)) == srcParentId) {
+//								dir_location_second = temp_third.get(i);
+//							}
+//						}
+//						}
+//						if (dir_location_second == -1) {
+//							LOG.info("WONKI : This error too");
+//						}
+//
+//						int child_num = NativeIO.readIntTest(FSDirectory.nvramAddress, dir_location_second + 4092 - 4);
+//						int next_dir = NativeIO.readIntTest(FSDirectory.nvramAddress, dir_location_second + 4092 - 8);
+//						// if next_dir is 0 exit
+//						for (int i = 0; i < child_num; i++) {
+//							int record = i * 4;
+//							int index = NativeIO.readIntTest(FSDirectory.nvramAddress,
+//									dir_location_second + 952 + record);
+//							if (index == location) {
+//								int offset = NativeIO.readIntTest(FSDirectory.nvramAddress,
+//										dir_location_second + 952 + 4 * (child_num - 1));
+//								NativeIO.putIntTest(FSDirectory.nvramAddress, offset,
+//										dir_location_second + 952 + record);
+//								NativeIO.putIntTest(FSDirectory.nvramAddress, 0,
+//										dir_location_second + 952 + 4 * (child_num - 1));
+//								NativeIO.putIntTest(FSDirectory.nvramAddress, child_num - 1,
+//										dir_location_second + 4092 - 4);
+//								break;
+//							}
+//						}
+//						int flag = 0;
+//
+//						while (next_dir != 0) {
+//							child_num = NativeIO.readIntTest(FSDirectory.nvramAddress, next_dir + 4092 - 4);
+//							for (int i = 0; i < child_num; i++) {
+//								int record_location = i * 4;
+//								int index = NativeIO.readIntTest(FSDirectory.nvramAddress, next_dir + record_location);
+//								if (index == location) {
+//									int offset = NativeIO.readIntTest(FSDirectory.nvramAddress,
+//											next_dir + 4 * (child_num - 1));
+//									NativeIO.putIntTest(FSDirectory.nvramAddress, offset, next_dir + record_location);
+//									NativeIO.putIntTest(FSDirectory.nvramAddress, 0, next_dir + 4 * (child_num - 1));
+//									NativeIO.putIntTest(FSDirectory.nvramAddress, child_num - 1, next_dir + 4092 - 4);
+//									flag = 1;
+//									break;
+//								}
+//							}
+//							next_dir = NativeIO.readIntTest(FSDirectory.nvramAddress, next_dir + 4092 - 8);
+//							if (flag == 1) {
+//								next_dir = 0;
+//							}
+//						}
+//					}
+//				} catch (NativeIOException e) {
+//					LOG.info("nativeIOException occur");
+//				}
+//				return true;
+//			} else {
+//				return fsd.addLastINodeNoQuotaCheck(dstParentIIP, toDst, fsd.nvram_enabled) != null;
+//			}
+//		}
+  
     boolean addSourceToDestination(long timestamp) {
-      final INode dstParent = dstParentIIP.getLastINode();
-      final byte[] dstChildName = dstIIP.getLastLocalName();
-      String toSrcName = null;
-      INode toSrc = null;
-      String dstParentName = null;
-      String srcParentName = null;
-      long toSrcId = 0;
-      long srcParentId = 0;
-      INode srcParent = null;
-			if (fsd.nvram_enabled) {
-				toSrc = srcIIP.getLastINode();
-				toSrcName = toSrc.getLocalName();
-				toSrcId = toSrc.getId();
-				dstParentName = dstParent.getLocalName();
-				srcParent = srcParentIIP.getLastINode();
-				srcParentName = srcParent.getLocalName();
-				srcParentId = srcParent.getId();
-			}
+        final INode dstParent = dstParentIIP.getLastINode();
+        final byte[] dstChildName = dstIIP.getLastLocalName();
+        String toSrcName = null;
+        INode toSrc = null;
+        String dstParentName = null;
+        String srcParentName = null;
+        long toSrcId = 0;
+        long srcParentId = 0;
+        INode srcParent = null;
+  			if (fsd.nvram_enabled) {
+  				toSrc = srcIIP.getLastINode();
+  				toSrcName = toSrc.getLocalName();
+  				toSrcId = toSrc.getId();
+  				dstParentName = dstParent.getLocalName();
+  				srcParent = srcParentIIP.getLastINode();
+  				srcParentName = srcParent.getLocalName();
+  				srcParentId = srcParent.getId();
+  			}
 
-      final INode toDst;
-      if (withCount == null) {
-        srcChild.setLocalName(dstChildName);
-        toDst = srcChild;
-      } else {
-        withCount.getReferredINode().setLocalName(dstChildName);
-        toDst = new INodeReference.DstReference(dstParent.asDirectory(),
-            withCount, dstIIP.getLatestSnapshotId());
-      }
-			if (fsd.nvram_enabled) {
-				/*Hashmap name modification*/
-				int location = -1;
-				try {
-//				LOG.info("WONKI : rename = " + toSrcName + " to " + dstChildName);
-				ArrayList<Integer> temp = fsd.NVramMap.get(toSrcName);
-				
-				if(temp.size() == 1) {
-					location = temp.get(0);
-					fsd.NVramMap.remove(toSrcName, location);
-				} else {
-				for(int i=0; i< temp.size();i++) {
-					if ( NativeIO.readLongTest(FSDirectory.nvramAddress, 316 + temp.get(i)) == toSrcId) {
-						location = temp.get(i);
-						fsd.NVramMap.remove(toSrcName, location);
-					}
-				}
-				}
-				fsd.NVramMap.put(new String(dstChildName), location);
-				//modification parent id
-				NativeIO.putLongTest(FSDirectory.nvramAddress, dstParent.getId(), location);
-				NativeIO.putIntBATest(FSDirectory.nvramAddress, dstChildName.length, dstChildName, location  + 12);
-				NativeIO.putLongTest(FSDirectory.nvramAddress, timestamp, location + 332);
-				
-					// new directory update
+        final INode toDst;
+        if (withCount == null) {
+          srcChild.setLocalName(dstChildName);
+          toDst = srcChild;
+        } else {
+          withCount.getReferredINode().setLocalName(dstChildName);
+          toDst = new INodeReference.DstReference(dstParent.asDirectory(),
+              withCount, dstIIP.getLatestSnapshotId());
+        }
+  			if (fsd.nvram_enabled) {
+  				/*Hashmap name modification*/
+//  				long reStart = System.currentTimeMillis();
+  				int location = -1;
+  				try {
+//  				LOG.info("WONKI : rename = " + toSrcName + " to " + dstChildName);
+  				ArrayList<Integer> temp = fsd.NVramMap.get(toSrcName);
+  				
+  				if(temp.size() == 1) {
+  					location = temp.get(0);
+  					fsd.NVramMap.remove(toSrcName, location);
+  				} else {
+  				for(int i=0; i< temp.size();i++) {
+  					if ( NativeIO.readLongTest(FSDirectory.nvramAddress, 316 + temp.get(i)) == toSrcId) {
+  						location = temp.get(i);
+  						fsd.NVramMap.remove(toSrcName, location);
+  					}
+  				}
+  				}
+  				
+//  				long resStart = System.currentTimeMillis();
+  				fsd.NVramMap.put(new String(dstChildName), location);
+  				//modification parent id
+  				NativeIO.putLongTest(FSDirectory.nvramAddress, dstParent.getId(), location);
+  				NativeIO.putIntBATest(FSDirectory.nvramAddress, dstChildName.length, dstChildName, location  + 12);
+  				NativeIO.putLongTest(FSDirectory.nvramAddress, timestamp, location + 332);
+  				
+  					// new directory update
 
-					if (dstParent.getId() == INodeId.ROOT_INODE_ID) {
-						if (((INodeDirectory) dstParent).children_location == null) {
-							((INodeDirectory) dstParent).children_location = new ArrayList<Integer>(5);
-						}
-						((INodeDirectory) dstParent).children_location.add(location);
-						((INodeDirectory) dstParent).child_num = ((INodeDirectory) dstParent).child_num + 1;
-					} else {
+  					if (dstParent.getId() == INodeId.ROOT_INODE_ID) {
+  						if (((INodeDirectory) dstParent).children_location == null) {
+  							((INodeDirectory) dstParent).children_location = new ArrayList<Integer>(5);
+  						}
+  						((INodeDirectory) dstParent).children_location.add(location);
+  						((INodeDirectory) dstParent).child_num = ((INodeDirectory) dstParent).child_num + 1;
+  					} else {
 
-						int dir_location = -1;
-						ArrayList<Integer> temp2 = fsd.NVramMap.get(dstParentName);
-						if (temp2.size() == 1) {
-							dir_location = temp2.get(0);
-						} else {
-						for (int i = 0; i < temp2.size(); i++) {
-							if (NativeIO.readLongTest(FSDirectory.nvramAddress, 316 + temp2.get(i)) == dstParent
-									.getId()) {
-								dir_location = temp2.get(i);
-							}
-						}
-						}
-						if (dir_location == -1) {
-							LOG.info("WONKI : This error too");
-						}
+  						int dir_location = -1;
+  						ArrayList<Integer> temp2 = fsd.NVramMap.get(dstParentName);
+  						if (temp2.size() == 1) {
+  							dir_location = temp2.get(0);
+  						} else {
+  						for (int i = 0; i < temp2.size(); i++) {
+  							if (NativeIO.readLongTest(FSDirectory.nvramAddress, 316 + temp2.get(i)) == dstParent
+  									.getId()) {
+  								dir_location = temp2.get(i);
+  							}
+  						}
+  						}
+  						if (dir_location == -1) {
+  							LOG.info("WONKI : This error too");
+  						}
 
-						int child_num = NativeIO.readIntTest(FSDirectory.nvramAddress, dir_location + 4092 - 4);
-						int next_dir;
+  						int success = 0;
+  						int children_num = 0;
+  						int child_num = NativeIO.readIntTest(FSDirectory.nvramAddress, dir_location + 4092 - 4);
+  						int next_dir;
+  						int last_page;
 						if (child_num == 782) {
-							next_dir = NativeIO.readIntTest(FSDirectory.nvramAddress, dir_location + 4092 - 8);
-							if (next_dir == 0) {
+							last_page = NativeIO.readIntTest(FSDirectory.nvramAddress, dir_location + 4092 - 12);
+							if (last_page == 0) {
 								next_dir = allocateNewSpace(fsd);
 								NativeIO.putIntTest(FSDirectory.nvramAddress, next_dir, dir_location + 4092 - 8);
+								NativeIO.putIntTest(FSDirectory.nvramAddress, next_dir, dir_location + 4092 - 12);
+								success = addChildrenInDirectoryFast(next_dir, location, 0);
+							} else {
+								children_num = NativeIO.readIntTest(FSDirectory.nvramAddress, last_page + 4092 - 4);
+								if (children_num == 1021) {
+									next_dir = allocateNewSpace(fsd);
+									NativeIO.putIntTest(FSDirectory.nvramAddress, next_dir, last_page + 4092 - 8);
+									NativeIO.putIntTest(FSDirectory.nvramAddress, next_dir, dir_location + 4092 - 12);
+									success = addChildrenInDirectoryFast(next_dir, location, 0);
+
+								} else {
+									success = addChildrenInDirectoryFast(last_page, location, children_num);
+								}
 							}
 							// store next_dir location in current directory
-							int success = addChildrenInDirectory(next_dir, location, fsd);
 
 						} else {
 							int next_location = 4 * (child_num);
 							NativeIO.putIntTest(FSDirectory.nvramAddress, location, dir_location + 952 + next_location);
 							NativeIO.putIntTest(FSDirectory.nvramAddress, child_num + 1, dir_location + 4092 - 4);
 						}
-					}
+  					}
+  					
+//  	  		long resExecTime = System.currentTimeMillis() - resStart ;
+//  	  		fsd.renameTime_sec = fsd.renameTime_sec + resExecTime;
+//  	  		LOG.info("renameChild sec ExecTime = " + fsd.renameTime_sec);
 
-				//old directory update
+  				//old directory update
+//  	  	long retStart = System.currentTimeMillis();
+  					if (srcParent.getId() == INodeId.ROOT_INODE_ID) {
+  						((INodeDirectory) srcParent).child_num = ((INodeDirectory) srcParent).child_num - 1;
+  						for (int i = 0; i < ((INodeDirectory) srcParent).children_location.size(); i++) {
+  							if (((INodeDirectory) srcParent).children_location.get(i) == location) {
+  								((INodeDirectory) srcParent).children_location.remove(i);
+  								break;
+  							}
+  						}
+  					} else {
+  						int dir_location_second = -1;
+  						ArrayList<Integer> temp_third = fsd.NVramMap.get(srcParentName);
+  						
+  						if (temp_third.size() == 1) {
+  							dir_location_second = temp_third.get(0);
+  						} else {
+  						for (int i = 0; i < temp_third.size(); i++) {
+  							if (NativeIO.readLongTest(FSDirectory.nvramAddress,
+  									316 + temp_third.get(i)) == srcParentId) {
+  								dir_location_second = temp_third.get(i);
+  							}
+  						}
+  						}
+  						if (dir_location_second == -1) {
+  							LOG.info("WONKI : This error too");
+  						}
 
-					if (srcParent.getId() == INodeId.ROOT_INODE_ID) {
-						((INodeDirectory) srcParent).child_num = ((INodeDirectory) srcParent).child_num - 1;
-						for (int i = 0; i < ((INodeDirectory) srcParent).children_location.size(); i++) {
-							if (((INodeDirectory) srcParent).children_location.get(i) == location) {
-								((INodeDirectory) srcParent).children_location.remove(i);
-								break;
-							}
-						}
-					} else {
-						int dir_location_second = -1;
-						ArrayList<Integer> temp_third = fsd.NVramMap.get(srcParentName);
-						
-						if (temp_third.size() == 1) {
-							dir_location_second = temp_third.get(0);
-						} else {
-						for (int i = 0; i < temp_third.size(); i++) {
-							if (NativeIO.readLongTest(FSDirectory.nvramAddress,
-									316 + temp_third.get(i)) == srcParentId) {
-								dir_location_second = temp_third.get(i);
-							}
-						}
-						}
-						if (dir_location_second == -1) {
-							LOG.info("WONKI : This error too");
-						}
-
-						int child_num = NativeIO.readIntTest(FSDirectory.nvramAddress, dir_location_second + 4092 - 4);
-						int next_dir = NativeIO.readIntTest(FSDirectory.nvramAddress, dir_location_second + 4092 - 8);
-						// if next_dir is 0 exit
-						for (int i = 0; i < child_num; i++) {
-							int record = i * 4;
-							int index = NativeIO.readIntTest(FSDirectory.nvramAddress,
-									dir_location_second + 952 + record);
-							if (index == location) {
-								int offset = NativeIO.readIntTest(FSDirectory.nvramAddress,
-										dir_location_second + 952 + 4 * (child_num - 1));
-								NativeIO.putIntTest(FSDirectory.nvramAddress, offset,
-										dir_location_second + 952 + record);
-								NativeIO.putIntTest(FSDirectory.nvramAddress, 0,
-										dir_location_second + 952 + 4 * (child_num - 1));
-								NativeIO.putIntTest(FSDirectory.nvramAddress, child_num - 1,
-										dir_location_second + 4092 - 4);
-								break;
-							}
-						}
-						int flag = 0;
-
-						while (next_dir != 0) {
-							child_num = NativeIO.readIntTest(FSDirectory.nvramAddress, next_dir + 4092 - 4);
-							for (int i = 0; i < child_num; i++) {
-								int record_location = i * 4;
-								int index = NativeIO.readIntTest(FSDirectory.nvramAddress, next_dir + record_location);
-								if (index == location) {
-									int offset = NativeIO.readIntTest(FSDirectory.nvramAddress,
-											next_dir + 4 * (child_num - 1));
-									NativeIO.putIntTest(FSDirectory.nvramAddress, offset, next_dir + record_location);
-									NativeIO.putIntTest(FSDirectory.nvramAddress, 0, next_dir + 4 * (child_num - 1));
-									NativeIO.putIntTest(FSDirectory.nvramAddress, child_num - 1, next_dir + 4092 - 4);
-									flag = 1;
-									break;
-								}
-							}
-							next_dir = NativeIO.readIntTest(FSDirectory.nvramAddress, next_dir + 4092 - 8);
-							if (flag == 1) {
-								next_dir = 0;
-							}
-						}
-					}
-				} catch (NativeIOException e) {
-					LOG.info("nativeIOException occur");
-				}
-				return true;
-			} else {
-				return fsd.addLastINodeNoQuotaCheck(dstParentIIP, toDst, fsd.nvram_enabled) != null;
-			}
-		}
+  						int child_num = NativeIO.readIntTest(FSDirectory.nvramAddress, dir_location_second + 4092 - 4);
+  						int next_dir = NativeIO.readIntTest(FSDirectory.nvramAddress, dir_location_second + 4092 - 8);
+  						// if next_dir is 0 exit
+  						for (int i = 0; i < child_num; i++) {
+  							int record = i * 4;
+  							int index = NativeIO.readIntTest(FSDirectory.nvramAddress,
+  									dir_location_second + 952 + record);
+  							if (index == location) {
+  								int offset = NativeIO.readIntTest(FSDirectory.nvramAddress,
+  										dir_location_second + 952 + 4 * (child_num - 1));
+  								NativeIO.putIntTest(FSDirectory.nvramAddress, offset,
+  										dir_location_second + 952 + record);
+  								NativeIO.putIntTest(FSDirectory.nvramAddress, 0,
+  										dir_location_second + 952 + 4 * (child_num - 1));
+  								NativeIO.putIntTest(FSDirectory.nvramAddress, child_num - 1,
+  										dir_location_second + 4092 - 4);
+  								break;
+  							}
+  						}
+  						int flag = 0;
+  						int last_mem = 0;
+  						
+  						while (next_dir != 0) {
+  							last_mem = NativeIO.readIntTest(FSDirectory.nvramAddress, next_dir + 4092 - 12);
+  							child_num = NativeIO.readIntTest(FSDirectory.nvramAddress, next_dir + 4092 - 4);
+  							
+  							if (location > last_mem && last_mem != 0) {
+  								next_dir = NativeIO.readIntTest(FSDirectory.nvramAddress, next_dir + 4092 - 8);
+  								continue;
+  							}
+  							for (int i = 0; i < child_num; i++) {
+  								int record_location = i * 4;
+  								int index = NativeIO.readIntTest(FSDirectory.nvramAddress, next_dir + record_location);
+  								if (index == location) {
+  									int offset = NativeIO.readIntTest(FSDirectory.nvramAddress,
+  											next_dir + 4 * (child_num - 1));
+  									NativeIO.putIntTest(FSDirectory.nvramAddress, offset, next_dir + record_location);
+  									NativeIO.putIntTest(FSDirectory.nvramAddress, 0, next_dir + 4 * (child_num - 1));
+  									NativeIO.putIntTest(FSDirectory.nvramAddress, child_num - 1, next_dir + 4092 - 4);
+  									flag = 1;
+  									break;
+  								}
+  							}
+  							next_dir = NativeIO.readIntTest(FSDirectory.nvramAddress, next_dir + 4092 - 8);
+  							if (flag == 1) {
+  								next_dir = 0;
+  							}
+  						}
+  					}
+//  		  	  		long retExecTime = System.currentTimeMillis() - retStart ;
+//  		  	  		fsd.renameTime_third = fsd.renameTime_third + retExecTime;
+//  		  	  		LOG.info("renameChild third add ExecTime = " + retExecTime);
+//  		  	  		LOG.info("renameChild third ExecTime = " + fsd.renameTime_third);
+  				} catch (NativeIOException e) {
+  					LOG.info("nativeIOException occur");
+  				}
+//  				long reExecTime = System.currentTimeMillis() - reStart ;
+//  				fsd.renameTime = fsd.renameTime + reExecTime;
+//  				LOG.info("renameChild ExecTime = " + fsd.renameTime);
+  				return true;
+  			} else {
+  				return fsd.addLastINodeNoQuotaCheck(dstParentIIP, toDst, fsd.nvram_enabled) != null;
+  			}
+  		}
 
     void updateMtimeAndLease(long timestamp) throws QuotaExceededException {
       srcParent.updateModificationTime(timestamp, srcIIP.getLatestSnapshotId());
@@ -955,6 +1167,21 @@ class FSDirRenameOp {
 				}
 				return addChildrenInDirectory(next_dir, children_offset, fsd);
 			}
+			int next_location = 4 * child_num;
+			NativeIO.putIntTest(FSDirectory.nvramAddress, children_offset, location + next_location);
+			NativeIO.putIntTest(FSDirectory.nvramAddress, child_num + 1, location + 4092 - 4);
+		//	NativeIO.putIntTest(FSDirectory.nvramAddress, commit, location + 4092);
+			success = 1;
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			LOG.info("ERROR = " + e.toString() + "Message =" + e.getMessage());
+		}
+		return success;
+	}
+	
+	public static int addChildrenInDirectoryFast(int location, int children_offset, int child_num) {
+		int success = 0;
+		try {
 			int next_location = 4 * child_num;
 			NativeIO.putIntTest(FSDirectory.nvramAddress, children_offset, location + next_location);
 			NativeIO.putIntTest(FSDirectory.nvramAddress, child_num + 1, location + 4092 - 4);

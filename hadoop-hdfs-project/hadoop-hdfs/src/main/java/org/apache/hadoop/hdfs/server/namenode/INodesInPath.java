@@ -237,7 +237,7 @@ public class INodesInPath {
 
 	static INodesInPath resolve(final INodeDirectory startingDir, final byte[][] components, final boolean resolveLink,
 			boolean nvram_enabled, FSDirectory fsd) throws UnresolvedLinkException {
-		long startresolve = System.currentTimeMillis();
+//		long startresolve = System.currentTimeMillis();
 		Preconditions.checkArgument(startingDir.compareTo(components[0]) == 0);
 		INode curNode = startingDir;
 
@@ -387,9 +387,9 @@ public class INodesInPath {
 			System.arraycopy(inodes, 0, newNodes, 0, newNodes.length);
 			inodes = newNodes;
 		}
-		long endresolve = System.currentTimeMillis();
-		fsd.getTime = fsd.getTime + (endresolve - startresolve);
-		LOG.info("[checking Time ] getTime = " + fsd.getTime);
+//		long endresolve = System.currentTimeMillis();
+//		fsd.getTime = fsd.getTime + (endresolve - startresolve);
+//		LOG.info("[checking Time ] getTime = " + fsd.getTime);
 		return new INodesInPath(inodes, components, isSnapshot, snapshotId);
 	}
 

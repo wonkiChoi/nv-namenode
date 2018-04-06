@@ -200,6 +200,7 @@ class FSDirStatAndListingOp {
 			HdfsFileStatus listing[];
 
 			if (fsd.nvram_enabled) {
+//				LOG.info("Listing Called");
 				int child_num;
 				int location = -1;
 				if (dirInode.getId() == INodeId.ROOT_INODE_ID) {

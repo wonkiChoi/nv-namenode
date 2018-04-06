@@ -545,28 +545,9 @@ public class FSImageSerialization {
 //			final byte[] name = file.getLocalNameBytes();
 //			new_pos = NativeIO.putIntBATest(FSDirectory.nvramAddress, name.length, name, position);
 
-			new_pos = NativeIO.putIntBATest(FSDirectory.nvramAddress, file.getLocalNameBytes().length, file.getLocalNameBytes(), position);
-
-			//ByteBuffer meta_set = ByteBuffer.allocate(40);
-//			long [] meta = new long[5];
-//			long fileid = file.getId();
-//			// mmap use
-//			//meta_set.putLong(fileid);
-//			meta[0] = fileid;
-//			long replication = (long) file.getFileReplication();
-//			meta[1] = replication;
-//			//meta_set.putLong(replication);
-//			long modificationTime = file.getModificationTime();
-//			meta[2] = modificationTime;
-//			//meta_set.putLong(modificationTime);
-//			long accessTime = file.getAccessTime();
-//			meta[3] = accessTime;
-//			//meta_set.putLong(accessTime);
-//			long preferredBlock = file.getPreferredBlockSize();
-//			meta[4] = preferredBlock;
-			//meta_set.putLong(preferredBlock);
+//			LOG.info("inode file name = " + file.getLocalName() + " " + file.getLocalNameBytes().length);
 			
-			//byte[] meta = meta_set.array();
+			new_pos = NativeIO.putIntBATest(FSDirectory.nvramAddress, file.getLocalNameBytes().length, file.getLocalNameBytes(), position);
 
 			new_pos = NativeIO.putLongLongTest(FSDirectory.nvramAddress, file.getId(), (long) file.getFileReplication(),
 					file.getModificationTime(), file.getAccessTime(), file.getPreferredBlockSize(), new_pos);
@@ -585,7 +566,8 @@ public class FSImageSerialization {
 			if (uc != null) {
 //				clientName = uc.getClientName().getBytes();
 //				clientMachine = uc.getClientMachine().getBytes();
-		//		LOG.info("clientName : clientMachine = " + clientName.length + " " + clientMachine.length);
+				//LOG.info("clientName : clientMachine = " + uc.getClientName() + " " + uc.getClientName().getBytes().length
+						//+ " " + uc.getClientMachine().getBytes().length);
 //				new_pos = NativeIO.putIntBATest(FSDirectory.nvramAddress, clientName.length, clientName, new_pos);	
 //				new_pos = NativeIO.putIntBATest(FSDirectory.nvramAddress, clientMachine.length, clientMachine, new_pos);	
 				new_pos = NativeIO.putIntClientTest(FSDirectory.nvramAddress, uc.getClientName().getBytes().length, uc.getClientName().getBytes(), new_pos);	
@@ -672,7 +654,7 @@ public class FSImageSerialization {
 
 //		new_pos = NativeIO.putIntTest(FSDirectory.nvramAddress, name.length, position);
 //	  new_pos = NativeIO.putBATest(FSDirectory.nvramAddress, name, new_pos);
-	  
+	//	LOG.info("inode dir name = " + node.getLocalName() + " " + node.getLocalNameBytes().length);
 		new_pos = NativeIO.putIntBATest(FSDirectory.nvramAddress, name.length, name, position);
 	  //mmap use
 	  //new_pos = NativeIO.putLongToNVRAM(4096, new_offset, node.getId(), new_pos);
