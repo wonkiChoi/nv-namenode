@@ -1064,7 +1064,7 @@ public class INodeDirectory extends INodeWithAdditionalFields
 				}
 				
 				if (node.isFile()) { // file 0 , directory 1
-//				  long timeStart = System.currentTimeMillis();
+				  long timeStart = System.currentTimeMillis();
 					position = NativeIO.putIntTest(FSDirectory.nvramAddress, 0, position);
 					position = FSImageSerialization.writeINodeFile(node.asFile(), new_offset,
 							((INodeFile) node).isUnderConstruction(), position, 0);	
