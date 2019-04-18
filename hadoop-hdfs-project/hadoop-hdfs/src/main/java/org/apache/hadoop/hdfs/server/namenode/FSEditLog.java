@@ -172,6 +172,7 @@ public class FSEditLog implements LogsPurgeable {
   private volatile boolean isAutoSyncScheduled = false;
   
   private boolean nvram_enabled;
+  private boolean advanced_nvram_enabled;
   
   // these are statistics counters.
   private long numTransactions;        // number of transactions
@@ -242,7 +243,7 @@ public class FSEditLog implements LogsPurgeable {
     this.sharedEditsDirs = FSNamesystem.getSharedEditsDirs(conf);
   }
   
-  FSEditLog(Configuration conf, NNStorage storage, List<URI> editsDirs, boolean nvram_enabled) {
+  FSEditLog(Configuration conf, NNStorage storage, List<URI> editsDirs, boolean nvram_enabled, boolean advanced_nvram_enabled) {
 	    isSyncRunning = false;
 	    this.conf = conf;
 	    this.storage = storage;
@@ -253,6 +254,7 @@ public class FSEditLog implements LogsPurgeable {
 	    // of the editlog, as no journals will exist
 	    this.editsDirs = Lists.newArrayList(editsDirs);
 	    this.nvram_enabled = nvram_enabled;
+	    this.advanced_nvram_enabled = advanced_nvram_enabled;
 
 	    this.sharedEditsDirs = FSNamesystem.getSharedEditsDirs(conf);
 	  }
@@ -432,7 +434,6 @@ public class FSEditLog implements LogsPurgeable {
    */
   void logEdit(final FSEditLogOp op) {
 	  
-//	  if(this.nvram_enabled == false) {
     synchronized (this) {
       assert isOpenForWrite() :
         "bad state: " + state;
@@ -444,7 +445,7 @@ public class FSEditLog implements LogsPurgeable {
       op.setTransactionId(txid);
 
 			try {
-				if (this.nvram_enabled == false) {
+				if (this.nvram_enabled == false && this.advanced_nvram_enabled == false) {
 					editLogStream.write(op);
 				}
       } catch (IOException ex) {
@@ -673,7 +674,7 @@ public class FSEditLog implements LogsPurgeable {
         	long flushtime = monotonicNow();
           logStream.flush();
           long flushend = monotonicNow() - flushtime;
-          LOG.info("[INFO] LOGSYNC ELAPSED TIME in logSync() : " + txid + " : " + flushend);
+//          LOG.info("[INFO] LOGSYNC ELAPSED TIME in logSync() : " + txid + " : " + flushend);
         }
       } catch (IOException ex) {
         synchronized (this) {
@@ -791,7 +792,6 @@ public class FSEditLog implements LogsPurgeable {
       op.setXAttrs(x.getXAttrs());
     }
 
-    LOG.info("PATH" + path +"logOpenFile called");
     logRpcIds(op, toLogRpcIds);
     logEdit(op);
   }
@@ -853,7 +853,6 @@ public class FSEditLog implements LogsPurgeable {
     if (x != null) {
       op.setXAttrs(x.getXAttrs());
     }
-    LOG.info("PATH" + path + "logMkDir called");
     logEdit(op);
   }
   
@@ -1602,6 +1601,9 @@ public class FSEditLog implements LogsPurgeable {
     while (true) {
       if (txId > toAtLeastTxId) return;
 			if (txId == toAtLeastTxId && this.nvram_enabled == true) {
+				return;
+			}
+			if (txId == toAtLeastTxId && this.advanced_nvram_enabled == true) {
 				return;
 			}
       if (!iter.hasNext()) break;

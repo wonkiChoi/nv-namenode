@@ -70,6 +70,7 @@ import org.apache.hadoop.hdfs.server.common.HdfsServerConstants.BlockUCState;
 import org.apache.hadoop.hdfs.server.common.HdfsServerConstants.ReplicaState;
 import org.apache.hadoop.hdfs.server.namenode.FSDirectory;
 import org.apache.hadoop.hdfs.server.namenode.INodeFile;
+import org.apache.hadoop.hdfs.server.namenode.INodeinNVRAM;
 import org.apache.hadoop.hdfs.server.namenode.NameNode;
 import org.apache.hadoop.hdfs.server.namenode.NameNode.OperationCategory;
 import org.apache.hadoop.hdfs.server.namenode.Namesystem;
@@ -652,7 +653,7 @@ public class BlockManager {
 	      Block commitBlock, FSDirectory dir) throws IOException {
 	 	   if(commitBlock == null)
 	 	      return false; // not committing, this is a block allocation retry
-	 	    //BlockInfoContiguous lastBlock = bc.getLastBlock();
+//	 	   BlockInfoContiguous lastBlock = bc.getLastBlock();
 	 	   BlockInfoContiguous lastBlock = this.getStoredBlock(bc.getLastBlock());
 		   if(lastBlock.isComplete())
 			      return false; // already completed (e.g. by syncBlock)
@@ -668,6 +669,25 @@ public class BlockManager {
 	 	    return c;  
 	  }
   
+  public boolean commitOrCompleteLastBlockNVRAM(INodeinNVRAM inode, BlockCollection bc,
+	      Block commitBlock) throws IOException {
+	 	   if(commitBlock == null)
+	 	      return false; // not committing, this is a block allocation retry
+	 	   //BlockInfoContiguous lastBlock = bc.getLastBlock();
+	 	   BlockInfoContiguous lastBlock = this.getStoredBlock(bc.getLastBlock());
+		   if(lastBlock.isComplete())
+			      return false; // already completed (e.g. by syncBlock)
+	 	   if(lastBlock == null)
+	 	      return false; // no blocks in file yet
+	 	     final boolean b = commitBlock((BlockInfoContiguousUnderConstruction) lastBlock, commitBlock);
+	       final boolean c = inode.commitBlock(commitBlock);
+	 	 
+	 	    if(countNodes(lastBlock).liveReplicas() >= minReplication) {
+	 	    	completeBlock(bc, bc.numBlocks()-1, false);
+	 	    }
+
+	 	    return c;  
+	  }
 
   /**
    * Convert a specified block of the file to a complete block.
@@ -900,7 +920,7 @@ public class BlockManager {
 //    	for(BlockInfoContiguous bk : blocksMap.getBlocks()) {
 //    		LOG.info("bk list = " + bk); 		
 //    	}
-     // for(DatanodeStorageInfo storage : blocksMap.getStorages(blk)) {
+//     for(DatanodeStorageInfo storage : blocksMap.getStorages(blk)) {
     	for(DatanodeStorageInfo storage : blocksMap.getStorages(blocksMap.getStoredBlock(blk))) {
     	  final DatanodeDescriptor d = storage.getDatanodeDescriptor();
         final boolean replicaCorrupt = corruptReplicas.isReplicaCorrupt(blk, d);

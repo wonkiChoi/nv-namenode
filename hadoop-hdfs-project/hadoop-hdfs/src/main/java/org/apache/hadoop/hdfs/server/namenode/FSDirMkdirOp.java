@@ -234,12 +234,24 @@ class FSDirMkdirOp {
       throw new FileAlreadyExistsException("Parent path is not a directory: " +
           parent.getPath() + " " + DFSUtil.bytes2String(name));
     }
-    final INodeDirectory dir = new INodeDirectory(inodeId, name, permission,
+    INodeDirectory dir = null;
+    INodeinNVRAM dirNVRAM = null;
+    if(fsd.advanced_nvram_enabled) {
+    	dirNVRAM = new INodeinNVRAM(parent.getLastINode(), name, 0);
+    } else {
+      dir = new INodeDirectory(inodeId, name, permission,
         timestamp);
+        }
 
     boolean nvram_enabled = fsd.getEnabled();
-    INodesInPath iip = fsd.addLastINode(parent, dir, true, nvram_enabled);
+    INodesInPath iip = null;
+    if(fsd.advanced_nvram_enabled) {
+    	iip = fsd.addLastINodeDir(parent, dirNVRAM, true, inodeId, permission, timestamp);
+    } else {
+      iip = fsd.addLastINode(parent, dir, true, nvram_enabled);
+        }
     if (iip != null && aclEntries != null) {
+    	if(fsd.advanced_nvram_enabled) dir = dirNVRAM.asDirectory();
       AclStorage.updateINodeAcl(dir, aclEntries, Snapshot.CURRENT_STATE_ID);
     }
     return iip;

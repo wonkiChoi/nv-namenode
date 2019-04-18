@@ -111,9 +111,11 @@ public class FileJournalManager implements JournalManager {
       int layoutVersion) throws IOException {
     try {
       boolean nvram_enabled = conf.getBoolean(DFSConfigKeys.DFS_NAME_NVRAM, DFSConfigKeys.DFS_NAME_NVRAM_DEFAULT);
+      boolean advanced_nvram_enabled = conf.getBoolean(DFSConfigKeys.DFS_NAME_ADVANCED_NVRAM,
+    		  DFSConfigKeys.DFS_NAME_ADVANCED_NVRAM_DEFAULT);
       currentInProgress = NNStorage.getInProgressEditsFile(sd, txid);
       EditLogOutputStream stm = null;
-      if(nvram_enabled) {
+      if(nvram_enabled || advanced_nvram_enabled) {
     	  if(txid == 1) {
     	   stm = new EditLogFileOutputStream(conf,
     	             currentInProgress, outputBufferCapacity);

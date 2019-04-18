@@ -213,14 +213,24 @@ class FSDirDeleteOp {
     targetNode.recordModification(latestSnapshot);
 
     // Remove the node from the namespace
-    long removed = fsd.removeLastINode(iip, fsd.nvram_enabled);
+    long removed = 0;
+    if (fsd.advanced_nvram_enabled) {
+    	removed = fsd.removeLastINodeNVRAM(iip);
+    } else {
+      removed = fsd.removeLastINode(iip, fsd.nvram_enabled);
+         }
     if (removed == -1) {
       return -1;
     }
 
     // set the parent's modification time
-    final INodeDirectory parent = targetNode.getParent();
-    parent.updateModificationTime(mtime, latestSnapshot);
+		if (fsd.advanced_nvram_enabled) {
+			final INodeinNVRAM parent  = (INodeinNVRAM)targetNode.parent;
+			parent.updateModificationTime(mtime, latestSnapshot);
+		} else {
+			final INodeDirectory parent = targetNode.getParent();
+			parent.updateModificationTime(mtime, latestSnapshot);
+		}
 
     fsd.updateCountForDelete(targetNode, iip);
     if (removed == 0) {

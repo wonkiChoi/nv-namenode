@@ -109,6 +109,8 @@ public class FSImage implements Closeable {
   */
   private final Set<Long> currentlyCheckpointing =
       Collections.<Long>synchronizedSet(new HashSet<Long>());
+  
+  public boolean advanced_nvram_enabled = false;
 
   /**
    * Construct an FSImage
@@ -150,7 +152,7 @@ public class FSImage implements Closeable {
   
   protected FSImage(Configuration conf,
           Collection<URI> imageDirs,
-          List<URI> editsDirs, boolean nvram_enabled)
+          List<URI> editsDirs, boolean nvram_enabled, boolean advanced_nvram_enabled)
       throws IOException {
     this.conf = conf;
 
@@ -160,8 +162,9 @@ public class FSImage implements Closeable {
        storage.setRestoreFailedStorage(true);
       }
 
-      this.editLog = new FSEditLog(conf, storage, editsDirs, nvram_enabled);
-
+      this.editLog = new FSEditLog(conf, storage, editsDirs, nvram_enabled, advanced_nvram_enabled);
+      this.advanced_nvram_enabled = advanced_nvram_enabled;
+      
     archivalManager = new NNStorageRetentionManager(conf, storage, editLog);
  }
  
@@ -1333,7 +1336,9 @@ public class FSImage implements Closeable {
     // Record this log segment ID in all of the storage directories, so
     // we won't miss this log segment on a restart if the edits directories
     // go missing.
-    storage.writeTransactionIdFileToStorage(getEditLog().getCurSegmentTxId());
+    
+    if(!advanced_nvram_enabled) 
+    	storage.writeTransactionIdFileToStorage(getEditLog().getCurSegmentTxId());
     return new CheckpointSignature(this);
   }
 

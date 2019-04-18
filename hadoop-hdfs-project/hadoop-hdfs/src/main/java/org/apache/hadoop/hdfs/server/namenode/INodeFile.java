@@ -543,8 +543,7 @@ public class INodeFile extends INodeWithAdditionalFields
       }
     }
     //wk modified
-    BlockInfoContiguous[] EMPTY_ARRAY = {};
-    setBlocks(EMPTY_ARRAY);
+    setBlocks(BlockInfoContiguous.EMPTY_ARRAY);
     if (getAclFeature() != null) {
       AclStorage.removeAclFeature(getAclFeature());
     }

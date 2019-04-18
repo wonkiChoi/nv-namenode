@@ -87,6 +87,7 @@ class FSDirStatAndListingOp {
       }
       isSuperUser = pc.isSuperUser();
     }
+    if(fsd.advanced_nvram_enabled) return getListingNVRAM(fsd, iip, src, startAfter, needLocation, isSuperUser);
     return getListing(fsd, iip, src, startAfter, needLocation, isSuperUser);
   }
 
@@ -324,6 +325,68 @@ class FSDirStatAndListingOp {
 			fsd.readUnlock();
 		}
 	}
+	
+	private static DirectoryListing getListingNVRAM(FSDirectory fsd, INodesInPath iip, String src, byte[] startAfter,
+			boolean needLocation, boolean isSuperUser) throws IOException {
+		String srcs = FSDirectory.normalizePath(src);
+		final boolean isRawPath = FSDirectory.isReservedRawName(src);
+
+		fsd.readLock();
+		try {
+			if (srcs.endsWith(HdfsConstants.SEPARATOR_DOT_SNAPSHOT_DIR)) {
+				return getSnapshotsListing(fsd, srcs, startAfter);
+			}
+			final int snapshot = iip.getPathSnapshotId();
+			final INode targetNode = iip.getLastINode();
+			final INodeinNVRAM target = (INodeinNVRAM)targetNode;
+			if (targetNode == null)
+				return null;
+			byte parentStoragePolicy = isSuperUser ? targetNode.getStoragePolicyID()
+					: BlockStoragePolicySuite.ID_UNSPECIFIED;
+
+			if (!targetNode.isDirectory()) {
+				return new DirectoryListing(new HdfsFileStatus[] { createFileStatus(fsd, src, HdfsFileStatus.EMPTY_NAME,
+						targetNode, needLocation, parentStoragePolicy, snapshot, isRawPath, iip) }, 0);
+			}
+
+			//final INodeDirectory dirInode = targetNode.asDirectory();
+		 
+			final ReadOnlyList<INode> contents = target.children == null ? ReadOnlyList.Util.<INode> emptyList()
+		            : ReadOnlyList.Util.asReadOnlyList(target.children);;
+			int startChild = INodeDirectory.nextChild(contents, startAfter);
+			int totalNumChildren = contents.size();
+			int numOfListing = Math.min(totalNumChildren - startChild, fsd.getLsLimit());
+			int locationBudget = fsd.getLsLimit();
+			int listingCnt = 0;
+			HdfsFileStatus listing[];
+
+			listing = new HdfsFileStatus[numOfListing];
+			for (int i = 0; i < numOfListing && locationBudget > 0; i++) {
+				INode cur = contents.get(startChild + i);
+				byte curPolicy = isSuperUser && !cur.isSymlink() ? cur.getLocalStoragePolicyID()
+						: BlockStoragePolicySuite.ID_UNSPECIFIED;
+				listing[i] = createFileStatus(fsd, src, cur.getLocalNameBytes(), cur, needLocation,
+						getStoragePolicyID(curPolicy, parentStoragePolicy), snapshot, isRawPath, iip);
+				listingCnt++;
+				if (needLocation) {
+					// Once we hit lsLimit locations, stop.
+					// This helps to prevent excessively large response
+					// payloads.
+					// Approximate #locations with locatedBlockCount() *
+					// repl_factor
+					LocatedBlocks blks = ((HdfsLocatedFileStatus) listing[i]).getBlockLocations();
+					locationBudget -= (blks == null) ? 0 : blks.locatedBlockCount() * listing[i].getReplication();
+				}
+			}
+			// truncate return array if necessary
+			if (listingCnt < numOfListing) {
+				listing = Arrays.copyOf(listing, listingCnt);
+			}
+			return new DirectoryListing(listing, totalNumChildren - startChild - listingCnt);
+		} finally {
+			fsd.readUnlock();
+		}
+	}
 
   /**
    * Get a listing of all the snapshots of a snapshottable directory
@@ -469,8 +532,12 @@ class FSDirStatAndListingOp {
          fsd.getFileEncryptionInfo(node, snapshot, iip);
 
      if (node.isFile()) {
-       final INodeFile fileNode = node.asFile();
-       size = fileNode.computeFileSize(snapshot);
+   	  final INodeFile fileNode = node.asFile();
+			if (fsd.advanced_nvram_enabled) {
+				size = ((INodeinNVRAM) node).computeFileSize(snapshot);
+			} else {
+				size = fileNode.computeFileSize(snapshot);
+			}
        replication = fileNode.getFileReplication(snapshot);
        blocksize = fileNode.getPreferredBlockSize();
        isEncrypted = (feInfo != null) ||

@@ -46,6 +46,7 @@ public class EditLogFileOutputStream extends EditLogOutputStream {
   public static final int MIN_PREALLOCATION_LENGTH = 1024 * 1024;
 
   private boolean nvram_enabled;
+  private boolean advanced_nvram_enabled;
   private File file;
   private FileOutputStream fp; // file stream for storing edit logs
   private FileChannel fc; // channel of the file stream for sync
@@ -81,6 +82,7 @@ public class EditLogFileOutputStream extends EditLogOutputStream {
             DFSConfigKeys.DFS_NAMENODE_EDITS_NOEDITLOGCHANNELFLUSH,
             DFSConfigKeys.DFS_NAMENODE_EDITS_NOEDITLOGCHANNELFLUSH_DEFAULT);
     nvram_enabled = conf.getBoolean(DFSConfigKeys.DFS_NAME_NVRAM, DFSConfigKeys.DFS_NAME_NVRAM_DEFAULT);
+    advanced_nvram_enabled = conf.getBoolean(DFSConfigKeys.DFS_NAME_ADVANCED_NVRAM, DFSConfigKeys.DFS_NAME_ADVANCED_NVRAM_DEFAULT);
     file = name;
     doubleBuf = new EditsDoubleBuffer(size);
     RandomAccessFile rp;
@@ -121,7 +123,11 @@ public class EditLogFileOutputStream extends EditLogOutputStream {
     fc.position(0);
     writeHeader(layoutVersion, doubleBuf.getCurrentBuf());
     setReadyToFlush();
-    flush();
+		if (this.advanced_nvram_enabled) {
+			flushAndSyncMeta(true);
+		} else {
+			flush();
+		}
   }
 
   /**
@@ -202,16 +208,31 @@ public class EditLogFileOutputStream extends EditLogOutputStream {
       LOG.info("Nothing to flush");
       return;
     }
-    if(this.nvram_enabled) {
-    preallocate(this.nvram_enabled); // preallocate file if necessary
-    } else {
-    preallocate();
-    }
-    doubleBuf.flushTo(fp);
+		if (this.nvram_enabled || this.advanced_nvram_enabled) {
+			preallocate(true); // preallocate file if necessary
+		} else {
+			preallocate();
+			doubleBuf.flushTo(fp);
+		}
     if (durable && !shouldSkipFsyncForTests && !shouldSyncWritesAndSkipFsync) {
       fc.force(false); // metadata updates not needed
     }
   }
+  
+  public void flushAndSyncMeta(boolean durable) throws IOException {
+	    if (fp == null) {
+	      throw new IOException("Trying to use aborted output stream");
+	    }
+	    if (doubleBuf.isFlushed()) {
+	      LOG.info("Nothing to flush");
+	      return;
+	    }
+				doubleBuf.flushTo(fp);
+		  if (durable && !shouldSkipFsyncForTests && !shouldSyncWritesAndSkipFsync) {
+	      fc.force(false); // metadata updates not needed
+	    }
+	  }
+
 
   /**
    * @return true if the number of buffered data exceeds the intial buffer size
@@ -245,7 +266,7 @@ public class EditLogFileOutputStream extends EditLogOutputStream {
     }
   }
   
-  private void preallocate(boolean nvram_enabled) throws IOException {
+  private void preallocate(boolean notPreallocate) throws IOException {
 	    long position = fc.position();
 	    long size = fc.size();
 	    int bufSize = doubleBuf.getReadyBuf().getLength();

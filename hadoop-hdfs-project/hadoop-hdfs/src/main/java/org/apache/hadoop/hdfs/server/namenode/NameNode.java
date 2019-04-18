@@ -1027,9 +1027,11 @@ public class NameNode implements NameNodeStatusMXBean {
 	    }
 	    System.out.println("Formatting using clusterid: " + clusterId);
 	    
-	    FSImage fsImage = new FSImage(conf, nameDirsToFormat, editDirsToFormat, true);
+	    boolean nvram_enabled = conf.getBoolean(DFSConfigKeys.DFS_NAME_NVRAM, DFSConfigKeys.DFS_NAME_NVRAM_DEFAULT);
+	    boolean advanced_nvram_enabled = conf.getBoolean(DFSConfigKeys.DFS_NAME_ADVANCED_NVRAM, DFSConfigKeys.DFS_NAME_ADVANCED_NVRAM_DEFAULT);
+	    FSImage fsImage = new FSImage(conf, nameDirsToFormat, editDirsToFormat, nvram_enabled, advanced_nvram_enabled);
 	    try {
-	      FSNamesystem fsn = new FSNamesystem(conf, fsImage, false, true);
+	      FSNamesystem fsn = new FSNamesystem(conf, fsImage, false, nvram_enabled, advanced_nvram_enabled);
 	      LOG.info("nvram format = " + fsn.dir.nvram_enabled);
 	      fsImage.getEditLog().initJournalsForWrite();
 

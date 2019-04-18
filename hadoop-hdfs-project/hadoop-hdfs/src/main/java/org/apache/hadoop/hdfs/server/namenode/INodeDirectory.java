@@ -944,7 +944,7 @@ public class INodeDirectory extends INodeWithAdditionalFields
     }
     return true;
   }
-   
+    
   public boolean addChild(INode node, final boolean setModTime,
 	      final int latestSnapshotId) throws QuotaExceededException {
 	    final int low = searchChildren(node.getLocalNameBytes());

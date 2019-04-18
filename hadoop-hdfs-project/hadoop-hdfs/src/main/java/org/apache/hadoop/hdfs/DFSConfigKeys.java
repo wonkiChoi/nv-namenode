@@ -36,7 +36,9 @@ import org.apache.hadoop.http.HttpConfig;
 public class DFSConfigKeys extends CommonConfigurationKeys {
 
 	public static final String  DFS_NAME_NVRAM = "dfs.nvram-enabled";
-	public static final boolean DFS_NAME_NVRAM_DEFAULT = false;			
+	public static final boolean DFS_NAME_NVRAM_DEFAULT = false;
+	public static final String  DFS_NAME_ADVANCED_NVRAM = "dfs.advanced-nvram-enabled";
+	public static final boolean DFS_NAME_ADVANCED_NVRAM_DEFAULT = false;		
   public static final String  DFS_BLOCK_SIZE_KEY = "dfs.blocksize";
   public static final long    DFS_BLOCK_SIZE_DEFAULT = 128*1024*1024;
   public static final String  DFS_REPLICATION_KEY = "dfs.replication";

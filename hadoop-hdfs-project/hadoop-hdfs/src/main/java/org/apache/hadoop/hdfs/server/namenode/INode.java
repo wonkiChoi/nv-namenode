@@ -61,7 +61,8 @@ public abstract class INode implements INodeAttributes, Diff.Element<byte[]>, Se
 public static final Log LOG = LogFactory.getLog(INode.class);
 
   /** parent is either an {@link INodeDirectory} or an {@link INodeReference}.*/
-  private INode parent = null;
+  //private INode parent = null;
+  public INode parent = null;
   public int parent_location;
   //public int parent_number;
 
@@ -643,7 +644,7 @@ public static final Log LOG = LogFactory.getLog(INode.class);
   public final void setParent(INodeDirectory parent) {
     this.parent = parent;
   }
-
+  
   /** Set container. */
   public final void setParentReference(INodeReference parent) {
     this.parent = parent;
