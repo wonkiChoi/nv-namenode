@@ -621,9 +621,10 @@ private static final int SIZE = 10000;
 		while (NativeIO.readIntTest(nvramAddress, currentPosition(i)) != 0) {
 			if(NativeIO.readIntTest(nvramAddress, currentPosition(i) + 4092) != 1) continue;
 
+			int isFile = 	NativeIO.readIntTest(FSDirectory.nvramAddress, currentPosition(i) + 8);
 			long parentId = NativeIO.readLongTest(nvramAddress, currentPosition(i));
 			byte[] name = NativeIO.readIntBATest(nvramAddress, currentPosition(i) + 12);
-			searchAndputChildren(currentPosition(i), parentId, name, r);			
+			searchAndputChildren(currentPosition(i), isFile, parentId, name, r);			
 			i++;
 		}
 	}
@@ -632,7 +633,7 @@ private static final int SIZE = 10000;
 		return 4096 + 4096 * i;
 	}
 	
-	private void searchAndputChildren(int curPos, long parentId, byte[] name, INodeinNVRAM r) {
+	private void searchAndputChildren(int curPos, int isFile, long parentId, byte[] name, INodeinNVRAM r) {
 		if (parentId == r.getId()) {
 			if (r.children == null) {
 				r.children = new ArrayList<INode>(5);
@@ -641,11 +642,16 @@ private static final int SIZE = 10000;
 			INodeinNVRAM newbie = new INodeinNVRAM(r, name, curPos);
 			final int insertionPoint = (r.children == null ? -1 : Collections.binarySearch(r.children, name));
 			r.children.add(-insertionPoint - 1, newbie);
+			if (isFile == 0) {
+				BlockInfoContiguous[] blklist = newbie.getBlocks();				
+				for(BlockInfoContiguous block : blklist)
+				namesystem.getBlockManager().addBlockCollection(block, newbie);
+			}
 			return;
 		}
 
 		for (INode inode : r.children) {
-			searchAndputChildren(curPos, parentId, name, (INodeinNVRAM) inode);
+			searchAndputChildren(curPos, isFile, parentId, name, (INodeinNVRAM) inode);
 		}
 		return;
 	}

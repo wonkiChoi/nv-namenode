@@ -63,7 +63,7 @@
 #define MMAP_PROT_EXEC org_apache_hadoop_io_nativeio_NativeIO_POSIX_MMAP_PROT_EXEC
 
 //#define NVM_GRAN 1610612736
-#define NVM_GRAM 1610616832
+#define NVM_GRAN 1610616832
 //#define NVM_GRAN 40960
 // the NativeIO$POSIX$Stat inner class and its constructor
 static jclass stat_clazz;
