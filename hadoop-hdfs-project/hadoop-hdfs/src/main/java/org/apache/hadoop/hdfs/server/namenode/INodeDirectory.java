@@ -99,6 +99,7 @@ public class INodeDirectory extends INodeWithAdditionalFields
   public List<Integer> children_location = null;
   public int offset;
   public int pos;
+  public long pos2;
   public int child_num;
   
   /** constructor */
@@ -996,7 +997,7 @@ public class INodeDirectory extends INodeWithAdditionalFields
 //			NativeIO.putIntTest(FSDirectory.nvramAddress, inode_num, 0);
 
 		//	new_offset = 4096 + 4096 * (inode_num - 1);
-			new_offset = 4096 + 4096 * (fsd.numINode - 1);
+			new_offset = (int) (4096 + 4096 * (fsd.numINode - 1));
 //		} catch (NativeIOException e) {
 //			LOG.info("nativeio exception occur");
 //		}

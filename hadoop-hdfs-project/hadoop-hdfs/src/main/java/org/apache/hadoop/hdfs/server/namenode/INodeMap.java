@@ -36,7 +36,7 @@ public class INodeMap {
   
   static INodeMap newInstance(INodeDirectory rootDir) {
     // Compute the map capacity by allocating 1% of total memory
-    int capacity = LightWeightGSet.computeCapacity(1, "INodeMap");
+    int capacity = LightWeightGSet.computeCapacity(0.12, "INodeMap");
     GSet<INode, INodeWithAdditionalFields> map
         = new LightWeightGSet<INode, INodeWithAdditionalFields>(capacity);
     map.put(rootDir);

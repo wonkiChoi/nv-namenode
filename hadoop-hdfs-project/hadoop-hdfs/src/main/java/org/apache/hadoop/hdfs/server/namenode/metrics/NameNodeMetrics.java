@@ -108,6 +108,13 @@ public class NameNodeMetrics {
 
   @Metric("Journal transactions") MutableRate transactions;
   @Metric("Journal syncs") MutableRate syncs;
+  @Metric("create Time") MutableGaugeInt createTime;
+  @Metric("addBlock Time") MutableGaugeInt addBlockTime;
+  @Metric("close Time") MutableGaugeInt closeTime;
+  @Metric("old rename time ") MutableGaugeInt oldRenameTime;
+  @Metric("new rename time") MutableGaugeInt newRenameTime;
+  @Metric("delete time") MutableGaugeInt deleteTime;
+  
   final MutableQuantiles[] syncsQuantiles;
   @Metric("Journal transactions batched in sync")
   MutableCounterLong transactionsBatchedInSync;
@@ -293,6 +300,26 @@ public class NameNodeMetrics {
       q.add(elapsed);
     }
   }
+  
+  public void addCreateTime(long elapsed) {
+	    createTime.set((int)elapsed);
+	  }
+  public void addBlockTime(long elapsed) {
+	    addBlockTime.set((int)elapsed);
+	  }
+  public void addCloseTime(long elapsed) {
+	    closeTime.set((int)elapsed);
+	  }
+  
+  public void addOldRenameTime(long elapsed) {
+	    oldRenameTime.set((int)elapsed);
+	  }
+  public void addNewRenameTime(long elapsed) {
+	    newRenameTime.set((int)elapsed);
+	  }
+  public void addDeleteTime(long elapsed) {
+	    deleteTime.set((int)elapsed);
+	  }
 
   public void setFsImageLoadTime(long elapsed) {
     fsImageLoadTime.set((int) elapsed);

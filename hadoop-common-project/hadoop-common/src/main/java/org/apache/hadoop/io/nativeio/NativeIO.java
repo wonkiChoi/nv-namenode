@@ -973,35 +973,58 @@ public class NativeIO {
       throws NativeIOException;
 
 	public static native long ReturnNVRAMAddress(long size, long offset) throws NativeIOException;
-
+ /* Use */
 	public static native int putLongTest(long[] addr, long data, int index) throws NativeIOException;
-	
+	/* Use */
+	public static native long putLongTestLong(long[] addr, long data, long index) throws NativeIOException;
+	/* Use */
 	public static native int putBlockTest(long[] addr, long id, long genstamp, int index) throws NativeIOException;
+	/* Use */
+	public static native long putBlockTestLong(long[] addr, long id, long genstamp, long index) throws NativeIOException;
 
 	public static native int putBlockChunkTest(long[] addr, byte[] block, int index) throws NativeIOException;
 	
 	public static native int putChildrenInDirectory(long[] addr, int target_offset, int directory_location, long inodeNum) throws NativeIOException;
 	
 	public static native int putChildrenInDirectoryFast(long[] addr, int target_offset, int directory_location, long inodeNum) throws NativeIOException;
-	
+	/* Use */
 	public static native int putLongLongTest(long[] addr, long id, long rep, long mod,
 			long access, long prefer, int index) throws NativeIOException;
+	/* Use */
+	public static native long putLongLongTestLong(long[] addr, long id, long rep, long mod,
+			long access, long prefer, long index) throws NativeIOException;
 	
 	public static native int putmetaTest(long[] addr, long[] meta, int index) throws NativeIOException;
 	
+	/*Use */
 	public static native int putIntTest(long[] addr, int data, int index) throws NativeIOException;
+	/*Use */
+	public static native long putIntTestLong(long[] addr, int data, long index) throws NativeIOException;
 
+	/*Use */
 	public static native int putIntBATest(long[] addr, int length, byte[] data, int index) throws NativeIOException;
-	
+	/*Use */
+	public static native long putIntBATestLong(long[] addr, int length, byte[] data, long index) throws NativeIOException;
+	/*Use */
 	public static native int putIntClientTest(long[] addr, int length, byte[] data, int index) throws NativeIOException;
-	
+	/*Use */
+	public static native long putIntClientTestLong(long[] addr, int length, byte[] data, long index) throws NativeIOException;
+	/*Use */
 	public static native int putIntPermTest(long[] addr, int length, byte[] data, int index) throws NativeIOException;
+	/*Use */
+	public static native long putIntPermTestLong(long[] addr, int length, byte[] data, long index) throws NativeIOException;
 	
 	public static native int putBATest(long[] addr, byte[] data, int index) throws NativeIOException;
 
+	/* Use */
 	public static native int readIntTest(long[] addr, int index) throws NativeIOException;
+	/* Use */
+	public static native int readIntTestLong(long[] addr, long index) throws NativeIOException;
 
+	/* Use */
 	public static native long readLongTest(long[] addr, int index) throws NativeIOException;
+	/* Use */
+	public static native long readLongTestLong(long[] addr, long index) throws NativeIOException;
 	
 	public static native int[] readIntArr(long[] addr, int index, int type) throws NativeIOException;
 
@@ -1014,13 +1037,23 @@ public class NativeIO {
 	public static native byte[] readBlockChunkTest(long[] addr, int index)
 			throws NativeIOException;
 
+	/* Use */
 	public static native byte[] readIntBATest(long[] addr, int index)
 			throws NativeIOException;
-	
+	/* Use */
+	public static native byte[] readIntBATestLong(long[] addr, long index)
+			throws NativeIOException;
+	/* Use */
 	public static native byte[] readIntClientTest(long[] addr, int index)
 			throws NativeIOException;
-	
+	/* Use */
+	public static native byte[] readIntClientTestLong(long[] addr, long index)
+			throws NativeIOException;
+	/* Use */
 	public static native byte[] readIntPermTest(long[] addr, int index)
+			throws NativeIOException;
+	/* Use */
+	public static native byte[] readIntPermTestLong(long[] addr, long index)
 			throws NativeIOException;
 	
 	public static native void clFlushFunction(ByteBuffer target, long size) throws NativeIOException;

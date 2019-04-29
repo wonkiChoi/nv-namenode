@@ -856,6 +856,7 @@ public class NameNode implements NameNodeStatusMXBean {
    * Stop all NameNode threads and wait for all to finish.
    */
   public void stop() {
+	  System.out.println("stop is called");
     synchronized(this) {
       if (stopRequested)
         return;

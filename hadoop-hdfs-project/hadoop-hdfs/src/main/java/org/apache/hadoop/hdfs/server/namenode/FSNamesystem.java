@@ -704,6 +704,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     }
     long timeTakenToLoadFSImage = monotonicNow() - loadStart;
     LOG.info("Finished loading FSImage in " + timeTakenToLoadFSImage + " msecs");
+    LOG.warn("Recovery Time : " + timeTakenToLoadFSImage + " msecs");
     NameNodeMetrics nnMetrics = NameNode.getNameNodeMetrics();
     if (nnMetrics != null) {
       nnMetrics.setFsImageLoadTime((int) timeTakenToLoadFSImage);
@@ -2618,6 +2619,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       checkOperation(OperationCategory.WRITE);
       checkNameNodeSafeMode("Cannot create file" + src);
       dir.writeLock();
+	    long add_start = now();
       try {
         src = dir.resolvePath(pc, src, pathComponents);
         final INodesInPath iip = dir.getINodesInPath4Write(src);
@@ -2630,6 +2632,8 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
         stat = FSDirStatAndListingOp.getFileInfo(
             dir, src, false, FSDirectory.isReservedRawName(srcArg), true);
       } finally {
+    	  dir.addTime += now() - add_start;
+    	  NameNode.getNameNodeMetrics().addCreateTime(dir.addTime);
         dir.writeUnlock();
       }
     } catch (StandbyException se) {
@@ -3298,6 +3302,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     checkOperation(OperationCategory.WRITE);
     waitForLoadingFSImage();
     writeLock();
+    long addblock_start = now();
     try {
       checkOperation(OperationCategory.WRITE);
       // Run the full analysis again, since things could have changed
@@ -3341,6 +3346,8 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       
       offset = pendingFile.computeFileSize();
     } finally {
+    	dir.addTime_sec += now() - addblock_start;
+    	NameNode.getNameNodeMetrics().addBlockTime(dir.addTime_sec);
       writeUnlock();
     }
     getEditLog().logSync();
@@ -3672,6 +3679,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     FSPermissionChecker pc = getPermissionChecker();
     waitForLoadingFSImage();
     writeLock();
+    long complete_start = now();
     try {
       checkOperation(OperationCategory.WRITE);
       checkNameNodeSafeMode("Cannot complete file " + src);
@@ -3679,6 +3687,8 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       success = completeFileInternal(src, holder,
         ExtendedBlock.getLocalBlock(last), fileId);
     } finally {
+    	dir.addTime_third += now() - complete_start;
+    	NameNode.getNameNodeMetrics().addCloseTime(dir.addTime_third);
       writeUnlock();
     }
     getEditLog().logSync();
@@ -3843,6 +3853,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     waitForLoadingFSImage();
     FSDirRenameOp.RenameOldResult ret = null;
     writeLock();
+    long rename_start = now();
     try {
       checkOperation(OperationCategory.WRITE);
       checkNameNodeSafeMode("Cannot rename " + src);
@@ -3851,6 +3862,8 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       logAuditEvent(false, "rename", src, dst, null);
       throw e;
     } finally {
+    	dir.renameTime += now() - rename_start;
+    	NameNode.getNameNodeMetrics().addOldRenameTime(dir.renameTime);
       writeUnlock();
     }
     boolean success = ret != null && ret.success;
@@ -3868,6 +3881,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     waitForLoadingFSImage();
     Map.Entry<BlocksMapUpdateInfo, HdfsFileStatus> res = null;
     writeLock();
+    long rename_start = now();
     //LOG.info("WONKI : rename called");
     try {
       checkOperation(OperationCategory.WRITE);
@@ -3878,6 +3892,8 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
           ")", src, dst, null);
       throw e;
     } finally {
+    	dir.renameTime_sec += now() - rename_start;
+    	NameNode.getNameNodeMetrics().addNewRenameTime(dir.renameTime_sec);
       writeUnlock();
     }
 
@@ -3905,6 +3921,7 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
     waitForLoadingFSImage();
     BlocksMapUpdateInfo toRemovedBlocks = null;
     writeLock();
+    long delete_start = now();
     boolean ret = false;
     try {
       checkOperation(OperationCategory.WRITE);
@@ -3916,6 +3933,8 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
       logAuditEvent(false, "delete", src);
       throw e;
     } finally {
+    	dir.removeTime += now() - delete_start;
+    	NameNode.getNameNodeMetrics().addDeleteTime(dir.removeTime);
       writeUnlock();
     }
     getEditLog().logSync();
@@ -4457,8 +4476,8 @@ public class FSNamesystem implements Namesystem, FSNamesystemMBean,
 	    // Create permanent INode, update blocks. No need to replace the inode here
 	    // since we just remove the uc feature from pendingFile
 	    long time = now();
-			NativeIO.putIntTest(FSDirectory.nvramAddress, 2, inode.location + 356);
-			NativeIO.putLongTest(FSDirectory.nvramAddress, time, inode.location + 332);
+			NativeIO.putIntTestLong(FSDirectory.nvramAddress, 2, inode.location + 356);
+			NativeIO.putLongTestLong(FSDirectory.nvramAddress, time, inode.location + 332);
 			
 			pendingFile.toCompleteFile(time);
 

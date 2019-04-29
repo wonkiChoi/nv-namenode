@@ -237,7 +237,7 @@ class FSDirMkdirOp {
     INodeDirectory dir = null;
     INodeinNVRAM dirNVRAM = null;
     if(fsd.advanced_nvram_enabled) {
-    	dirNVRAM = new INodeinNVRAM(parent.getLastINode(), name, 0);
+    	dirNVRAM = new INodeinNVRAM(parent.getLastINode(), name, 0L);
     } else {
       dir = new INodeDirectory(inodeId, name, permission,
         timestamp);

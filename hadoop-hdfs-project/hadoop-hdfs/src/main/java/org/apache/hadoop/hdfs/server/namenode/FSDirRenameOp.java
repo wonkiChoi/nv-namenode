@@ -154,7 +154,7 @@ class FSDirRenameOp {
   static boolean unprotectedRenameTo(FSDirectory fsd, String src, String dst,
       final INodesInPath srcIIP, final INodesInPath dstIIP, long timestamp)
       throws IOException {
-	  long startTime = System.currentTimeMillis();
+//	  long startTime = System.currentTimeMillis();
     assert fsd.hasWriteLock();
     final INode srcInode = srcIIP.getLastINode();
     //LOG.info("WONKI rename = " + src + " TO " + dst);
@@ -231,9 +231,9 @@ class FSDirRenameOp {
     }
     NameNode.stateChangeLog.warn("DIR* FSDirectory.unprotectedRenameTo: " +
         "failed to rename " + src + " to " + dst);
-    long endTime = System.currentTimeMillis();
-    fsd.renameTime = fsd.renameTime + (endTime - startTime);
-    LOG.info("[checking Time ] renameTime = " + fsd.renameTime);
+//    long endTime = System.currentTimeMillis();
+//    fsd.renameTime = fsd.renameTime + (endTime - startTime);
+//    LOG.warn("[checking Time ] renameTime = " + fsd.renameTime);
     return false;
   }
 
@@ -1362,7 +1362,7 @@ class FSDirRenameOp {
 //			NativeIO.putIntTest(FSDirectory.nvramAddress, inode_num, 0);
 
 		//	new_offset = 4096 + 4096 * (inode_num - 1);
-			new_offset = 4096 + 4096 * (fsd.numINode - 1);
+			new_offset = (int)(4096 + 4096 * (fsd.numINode - 1));
 
 //			new_offset = 4096 + 4096 * (inode_num - 1);
 //		} catch (NativeIOException e) {

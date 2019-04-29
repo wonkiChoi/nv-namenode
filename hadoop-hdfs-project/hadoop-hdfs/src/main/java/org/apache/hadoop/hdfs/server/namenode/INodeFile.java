@@ -71,7 +71,6 @@ public class INodeFile extends INodeWithAdditionalFields
   }
 
   /** Cast INode to INodeFile. */
-	// wk modified public static -> public
   public static INodeFile valueOf(INode inode, String path, boolean acceptNull)
       throws FileNotFoundException {
     if (inode == null) {

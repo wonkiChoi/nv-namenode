@@ -67,6 +67,7 @@ public class PermissionStatus implements Writable {
   private FsPermission permission;
 
   public int pos;
+  public long pos2;
   private PermissionStatus() {}
 
   /** Constructor */
@@ -120,6 +121,24 @@ public class PermissionStatus implements Writable {
 	  this.pos = new_pos;
 	  }
   
+  public void readFields(long new_offset, long pos, long[] ptr) throws IOException {
+
+	  long new_pos = pos;
+
+	 // username = new String(NativeIO.readIntBATest(ptr, new_offset + new_pos));
+	  username = new String(NativeIO.readIntPermTestLong(ptr, new_offset + new_pos));
+	  new_pos = new_pos + 304;
+
+	//  groupname = new String(NativeIO.readIntBATest(ptr, new_offset + new_pos));
+	  groupname = new String(NativeIO.readIntPermTestLong(ptr, new_offset + new_pos));
+	  new_pos = new_pos + 304;
+	  
+	  permission = FsPermission.read(new_offset, new_pos, ptr);
+	  new_pos = new_pos + 4;
+	  this.pos2 = new_pos;
+	  }
+  
+  
   public void readFields(ByteBuffer in) throws IOException {
 //	    username = Text.readString(in, Text.DEFAULT_MAX_LEN);
 //	    groupname = Text.readString(in, Text.DEFAULT_MAX_LEN);
@@ -156,6 +175,12 @@ public class PermissionStatus implements Writable {
 	  }
   
   public static PermissionStatus read(int new_offset, int pos, long[] ptr) throws IOException {
+	    PermissionStatus p = new PermissionStatus();
+	    p.readFields(new_offset, pos, ptr);
+	    return p;
+	  }
+  
+  public static PermissionStatus read(long new_offset, long pos, long[] ptr) throws IOException {
 	    PermissionStatus p = new PermissionStatus();
 	    p.readFields(new_offset, pos, ptr);
 	    return p;

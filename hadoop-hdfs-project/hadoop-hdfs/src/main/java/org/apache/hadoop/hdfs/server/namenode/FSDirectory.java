@@ -87,6 +87,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import org.apache.hadoop.io.nativeio.*;
 
@@ -199,7 +200,7 @@ private static final int SIZE = 10000;
   
   private static INodeinNVRAM createRootNVRAM(FSNamesystem namesystem) 
 		  throws NativeIOException, IOException {
-	    final INodeinNVRAM r = new INodeinNVRAM(null,INodeDirectory.ROOT_NAME, 4096);
+	    final INodeinNVRAM r = new INodeinNVRAM(null,INodeDirectory.ROOT_NAME, 0L);
 
 		  
 		  nvramAddress = new long[10000];
@@ -207,12 +208,36 @@ private static final int SIZE = 10000;
 				nvramAddress[j] = 0;
 			}
 			//1610612736
-			nvramAddress[0] = NativeIO.ReturnNVRAMAddress(1610612736, 4096);
-			nvramAddress[1] = NativeIO.ReturnNVRAMAddress(1610612736, 4096 + 1610612736);
-			nvramAddress[2] = NativeIO.ReturnNVRAMAddress(1610612736, 4096 + (1610612736 * 2));
+			nvramAddress[0] = NativeIO.ReturnNVRAMAddress(1610612736, 4096L);
+			nvramAddress[1] = NativeIO.ReturnNVRAMAddress(1610612736, 1610616832L);
+			nvramAddress[2] = NativeIO.ReturnNVRAMAddress(1610612736, 3221229568L);
 			
-			int position = r.location;
-			position = NativeIO.putLongTest(FSDirectory.nvramAddress, 0, position);
+//			inodeCache = new INodeCache<Long, INodeFile>(100);
+			LOG.warn(" test ");
+			
+//			NativeIO.putLongTestLong(FSDirectory.nvramAddress, 2, 3221229580L);
+//			
+//			long test = NativeIO.readLongTestLong(FSDirectory.nvramAddress, 3221229580L);
+//			LOG.warn("test result " + test);
+//			
+//			NativeIO.putLongTestLong(FSDirectory.nvramAddress, 0, 3221229580L);
+
+			
+//			nvramAddress[0] = NativeIO.ReturnNVRAMAddress(805306368, 4096);
+//			nvramAddress[1] = NativeIO.ReturnNVRAMAddress(805306368, 4096 + 805306368); // 805310464
+//			nvramAddress[2] = NativeIO.ReturnNVRAMAddress(805306368, 4096 + (805306368 * 2)); // 1610616832
+			
+//			nvramAddress[0] = NativeIO.ReturnNVRAMAddress(40960, 4096);
+//			nvramAddress[1] = NativeIO.ReturnNVRAMAddress(40960, 4096 + 40960);
+//			nvramAddress[2] = NativeIO.ReturnNVRAMAddress(40960, 4096 + (40960 * 2));
+			
+			for(int k = 0; k < 3; k++) 
+			{
+				LOG.warn(" nvramAddress + " + nvramAddress[k]);
+			}
+			
+			long position = r.location;
+			position = NativeIO.putLongTestLong(FSDirectory.nvramAddress, 0, position);
 
 			//==================== calculate permission ============================
 			PermissionStatus permissions = namesystem.createFsOwnerPermissions(new FsPermission((short) 0755));
@@ -228,20 +253,20 @@ private static final int SIZE = 10000;
 			
 			// ================================================================
 		  
-			position = NativeIO.putIntTest(FSDirectory.nvramAddress, 1, position);
+			position = NativeIO.putIntTestLong(FSDirectory.nvramAddress, 1, position);
 			
-			position = NativeIO.putIntBATest(FSDirectory.nvramAddress, r.name.length, r.name, position);
-			position = NativeIO.putLongTest(FSDirectory.nvramAddress, INodeId.ROOT_INODE_ID, position);
-			position = NativeIO.putLongTest(FSDirectory.nvramAddress, 0L, position + 8);
+			position = NativeIO.putIntBATestLong(FSDirectory.nvramAddress, r.name.length, r.name, position);
+			position = NativeIO.putLongTestLong(FSDirectory.nvramAddress, INodeId.ROOT_INODE_ID, position);
+			position = NativeIO.putLongTestLong(FSDirectory.nvramAddress, 0L, position + 8);
 			
-			position = NativeIO.putIntPermTest(FSDirectory.nvramAddress,
+			position = NativeIO.putIntPermTestLong(FSDirectory.nvramAddress,
 					userName.length, 
 					userName, position);
-			position = NativeIO.putIntPermTest(FSDirectory.nvramAddress,
+			position = NativeIO.putIntPermTestLong(FSDirectory.nvramAddress,
 					groupName.length,
 					groupName, position);
-			position = NativeIO.putIntTest(FSDirectory.nvramAddress, s, position);
-		  position = NativeIO.putIntTest(FSDirectory.nvramAddress, 1, r.location + 4092);
+			position = NativeIO.putIntTestLong(FSDirectory.nvramAddress, s, position);
+		  position = NativeIO.putIntTestLong(FSDirectory.nvramAddress, 1, r.location + 4092);
 	
       return r;
 	  }
@@ -268,8 +293,8 @@ private static final int SIZE = 10000;
   public INodeinNVRAM rootDirNVRAM;
 
   public long addTime = 0;
-  public long addTime_sec = 0;
-  public long addTime_third = 0;
+  public long addTime_sec = 0; // addBlock
+  public long addTime_third = 0; // complete
   public long getTime = 0;
   public long removeTime = 0;
   public long removeTime_sec = 0;
@@ -277,8 +302,9 @@ private static final int SIZE = 10000;
   public long renameTime = 0;
   public long renameTime_sec = 0;
   public long renameTime_third = 0;
-  public int numINode;
+  public long numINode;
   public INodeCache<Long,INode> INode_Cache = null;
+//  public static INodeCache<Long,INodeFile> inodeCache = null;
  // public static long nvramAddress;
   public static long[] nvramAddress;
   private final FSNamesystem namesystem;
@@ -384,8 +410,10 @@ private static final int SIZE = 10000;
     rootDir = createRoot(ns);
     rootDirNVRAM = null;
     inodeMap = INodeMap.newInstance(rootDir);
-    NVramMap = NvramMap.newInstance(rootDir);
-    directoryCache = DirectoryCache.newInstance(rootDir);
+//    NVramMap = NvramMap.newInstance(rootDir);
+//    directoryCache = DirectoryCache.newInstance(rootDir);
+    NVramMap = null;
+    directoryCache = null;
     
     this.isPermissionEnabled = conf.getBoolean(
       DFSConfigKeys.DFS_PERMISSIONS_ENABLED_KEY,
@@ -475,6 +503,11 @@ private static final int SIZE = 10000;
   FSDirectory(FSNamesystem ns, Configuration conf, boolean nvram_enabled, boolean advanced_nvram_enabled) throws IOException, NativeIOException {
 	    this.dirLock = new ReentrantReadWriteLock(true); // fair
 	    this.inodeId = new INodeId();
+	    if(advanced_nvram_enabled) {
+	    	this.numINode = 1;
+	    } else {
+		    this.numINode = 0;
+	        }
 	    if(advanced_nvram_enabled) {
 	    	rootDir = createRoot(ns);;
 	    	rootDirNVRAM = createRootNVRAM(ns);
@@ -571,11 +604,6 @@ private static final int SIZE = 10000;
 	    ezManager = new EncryptionZoneManager(this, conf);
 	    this.nvram_enabled = nvram_enabled;
 	    this.advanced_nvram_enabled = advanced_nvram_enabled;
-	    if(advanced_nvram_enabled) {
-	    	this.numINode = 1;
-	    } else {
-		    this.numINode = 0;
-	        }
 
 	    LOG.info("nvram_enabled in FSDirectory = " + nvram_enabled);
 	    LOG.info("advanced_nvram_enabled in FSDirectory = " + advanced_nvram_enabled);
@@ -616,43 +644,81 @@ private static final int SIZE = 10000;
 	
 	private void RecoveryFromNVRAM(FSNamesystem namesystem, INodeinNVRAM r)
 			throws NativeIOException, IOException {
+		LOG.warn("recovery From NVRAM");
 
-		int i = 1;
-		while (NativeIO.readIntTest(nvramAddress, currentPosition(i)) != 0) {
-			if(NativeIO.readIntTest(nvramAddress, currentPosition(i) + 4092) != 1) continue;
+		long i = 1;
+		long id = 0;
+		while ( (id = NativeIO.readLongTestLong(nvramAddress, currentPosition(i) + 316)) != 0) {
+			
+			int isFile = 	NativeIO.readIntTestLong(FSDirectory.nvramAddress, currentPosition(i) + 8);
+			long parentId = NativeIO.readLongTestLong(nvramAddress, currentPosition(i));
+			byte[] name = NativeIO.readIntBATestLong(nvramAddress, currentPosition(i) + 12);
+			if(NativeIO.readIntTestLong(nvramAddress, currentPosition(i) + 4092) != 1) {
+//				LOG.warn("id " + id + " isFile " + isFile + " parentId " + parentId + " name " +
+//						DFSUtil.bytes2String(name) + " is erased");
+				i++;
+				this.numINode++;
+				continue;
+			}
 
-			int isFile = 	NativeIO.readIntTest(FSDirectory.nvramAddress, currentPosition(i) + 8);
-			long parentId = NativeIO.readLongTest(nvramAddress, currentPosition(i));
-			byte[] name = NativeIO.readIntBATest(nvramAddress, currentPosition(i) + 12);
-			searchAndputChildren(currentPosition(i), isFile, parentId, name, r);			
+//			LOG.warn("id " + id + " isFile " + isFile + " parentId " + parentId + " name " +
+//			DFSUtil.bytes2String(name) + " is not erased, so find parent");
+			searchAndputChildren(namesystem, currentPosition(i), isFile, parentId, name, r);			
 			i++;
+			this.numINode++;
 		}
+		
+//		
+//		int isFile = 	NativeIO.readIntTestLong(FSDirectory.nvramAddress, currentPosition(i) + 8);
+//		long parentId = NativeIO.readLongTestLong(nvramAddress, currentPosition(i));
+//		byte[] name = NativeIO.readIntBATestLong(nvramAddress, currentPosition(i) + 12);
+//		
+//		LOG.warn("break : " + NativeIO.readLongTestLong(nvramAddress, currentPosition(i)));
+//		LOG.warn("id " + id + " isFile " + isFile + " parentId " + parentId + " name " +
+//				DFSUtil.bytes2String(name) + " is over");
 	}
 	
-	private int currentPosition(int i) {
-		return 4096 + 4096 * i;
+	private long currentPosition(long i) {
+		return (4096 * i);
 	}
 	
-	private void searchAndputChildren(int curPos, int isFile, long parentId, byte[] name, INodeinNVRAM r) {
-		if (parentId == r.getId()) {
+	private void searchAndputChildren(FSNamesystem ns, long curPos, int isFile, long parentId,
+			byte[] name, INodeinNVRAM r) {
+//		LOG.warn("searchAndputChildren " + " parentId " + parentId + " - " + DFSUtil.bytes2String(name) + " find "
+//		+ " r.getId " + r.getId() + " - " +  DFSUtil.bytes2String(r.name) + " curPos is " + curPos);
+		if (parentId == r.getId()) {			
 			if (r.children == null) {
 				r.children = new ArrayList<INode>(5);
 			}
 
 			INodeinNVRAM newbie = new INodeinNVRAM(r, name, curPos);
 			final int insertionPoint = (r.children == null ? -1 : Collections.binarySearch(r.children, name));
-			r.children.add(-insertionPoint - 1, newbie);
+			r.children.add(-insertionPoint - 1, (INode)newbie);
+//			LOG.warn("parentId " + parentId + " - " + DFSUtil.bytes2String(name) + " is inserted into "
+//			+ " r.getId " + r.getId() + " - " +  DFSUtil.bytes2String(r.name) + " curPos is " + curPos);
 			if (isFile == 0) {
-				BlockInfoContiguous[] blklist = newbie.getBlocks();				
+				BlockInfoContiguous[] blklist = newbie.getBlocks();
+				if (blklist.length == 0) return;
 				for(BlockInfoContiguous block : blklist)
-				namesystem.getBlockManager().addBlockCollection(block, newbie);
+				  ns.getBlockManager().addBlockCollection(block, newbie);
+//				  ns.getBlockManager().processQueuedMessagesForBlock(block);
 			}
 			return;
 		}
-
-		for (INode inode : r.children) {
-			searchAndputChildren(curPos, isFile, parentId, name, (INodeinNVRAM) inode);
+		
+		if (r.children == null) {
+//			LOG.warn("This is Leaf");
+			return;
 		}
+		
+		INode prevInode = null;
+		for (INode inode : r.children) {
+			prevInode = inode;
+			if(inode.getId() > parentId) break;
+		}
+		
+		searchAndputChildren(ns, curPos, isFile, parentId, name, (INodeinNVRAM) prevInode);
+			
 		return;
 	}
 	   
@@ -774,7 +840,8 @@ private static final int SIZE = 10000;
     INodeinNVRAM newNodeNVRAM = null;
     if(this.advanced_nvram_enabled) {
 		  id = allocateNewInodeId();
-		  newNodeNVRAM = new INodeinNVRAM(null, localName.getBytes(Charsets.UTF_8), 0);   	
+		  newNodeNVRAM = new INodeinNVRAM(null, localName.getBytes(Charsets.UTF_8), 0L);
+		  //LOG.warn("FSDirectory Name " + localName.getBytes(Charsets.UTF_8));
 		} else {
 			newNode = newINodeFile(allocateNewInodeId(), permissions, modTime, modTime, replication,
 					preferredBlockSize);
@@ -787,7 +854,7 @@ private static final int SIZE = 10000;
     try {
 //    	long time = System.currentTimeMillis();
 			if (this.advanced_nvram_enabled) {
-				newiip = addINodeNVRAMFile(existing, newNodeNVRAM,id, permissions, modTime, replication,
+				newiip = addINodeNVRAMFile(existing, newNodeNVRAM, id, permissions, modTime, replication,
 						preferredBlockSize, clientName, clientMachine);
 			} else {
 				newiip = addINode(existing, newNode, this.nvram_enabled);

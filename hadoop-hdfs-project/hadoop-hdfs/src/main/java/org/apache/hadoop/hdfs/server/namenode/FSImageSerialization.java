@@ -445,6 +445,110 @@ public class FSImageSerialization {
 //		file.pos = new_pos;
 		return file;
 	}
+	
+	static INodeFile readINodeFile(long new_offset, long pos) throws IOException {
+		long new_pos = pos;
+
+		byte[] name = NativeIO.readIntBATestLong(FSDirectory.nvramAddress, new_offset + new_pos);
+		new_pos = new_pos + 304;
+		
+		//byte[] meta = NativeIO.readmetaTest(FSDirectory.nvramAddress, new_offset + new_pos);
+		//long [] meta = NativeIO.readmetaTest(FSDirectory.nvramAddress, new_offset + new_pos);
+		//new_pos= new_pos + 40;
+		
+		
+		//ByteBuffer meta_byte = ByteBuffer.wrap(meta);
+//		LOG.info("meta byte status =  " + meta_byte.toString());
+//		long inodeId = meta_byte.getLong();
+//		short blockReplication = (short) meta_byte.getLong();
+//		long modificationTime = meta_byte.getLong();
+//		long accessTime = meta_byte.getLong();
+//		long preferredBlockSize = meta_byte.getLong();
+		
+//		long inodeId = meta[0];
+//		short blockReplication = (short) meta[1];
+//		long modificationTime = meta[2];
+//		long accessTime = meta[3];
+//		long preferredBlockSize = meta[4];
+
+		long inodeId = NativeIO.readLongTestLong(FSDirectory.nvramAddress, new_offset  + new_pos);
+		new_pos = new_pos + 8;
+		short blockReplication = (short) NativeIO.readLongTestLong(FSDirectory.nvramAddress, new_offset + new_pos);
+		new_pos = new_pos + 8;
+	
+		long modificationTime = NativeIO.readLongTestLong(FSDirectory.nvramAddress, new_offset + new_pos);
+		new_pos = new_pos + 8;
+		
+		long accessTime = NativeIO.readLongTestLong(FSDirectory.nvramAddress, new_offset + new_pos);
+		new_pos = new_pos + 8;
+		
+		long preferredBlockSize = NativeIO.readLongTestLong(FSDirectory.nvramAddress, new_offset + new_pos);
+		new_pos = new_pos + 8;
+		
+		int writeUnderConstruction = NativeIO.readIntTestLong(FSDirectory.nvramAddress, new_offset + new_pos);
+		
+		new_pos = new_pos + 4;
+		String clientName = null;
+		String clientMachine = null;
+		
+		if (writeUnderConstruction == 1) {
+			//byte[] str = NativeIO.readIntBATest(FSDirectory.nvramAddress, new_offset + new_pos);
+			byte[] str = NativeIO.readIntClientTestLong(FSDirectory.nvramAddress, new_offset + new_pos);
+			new_pos = new_pos + 304;
+			clientName = new String(str);
+			//byte[] str_second = NativeIO.readIntBATest(FSDirectory.nvramAddress, new_offset + new_pos);
+			byte[] str_second = NativeIO.readIntClientTestLong(FSDirectory.nvramAddress, new_offset + new_pos);
+			new_pos = new_pos + 304;
+			clientMachine = new String(str_second);
+		} else {
+			new_pos = new_pos + 608;
+		}
+		
+		PermissionStatus perm = PermissionStatus.read(new_offset, new_pos, FSDirectory.nvramAddress);
+		INodeFile file = null;
+		//file.pos = perm.pos;
+		new_pos = perm.pos2;
+		int numBlocks = NativeIO.readIntTestLong(FSDirectory.nvramAddress, new_offset + new_pos);
+		new_pos = new_pos + 4;
+
+		if (numBlocks == 0) {
+			file = new INodeFile(inodeId, name, perm, modificationTime, accessTime, BlockInfoContiguous.EMPTY_ARRAY,
+					blockReplication, preferredBlockSize, (byte)0);
+			if (writeUnderConstruction == 1) {
+				file.toUnderConstruction(clientName, clientMachine);
+			}
+		} else {
+			BlockInfoContiguous[] blocks = new BlockInfoContiguous[numBlocks];
+			Block blk = new Block();
+			int i = 0;
+			for (; i < numBlocks; i++) {
+
+				blk.setBlockId(NativeIO.readLongTestLong(FSDirectory.nvramAddress, new_offset + new_pos));
+				new_pos = new_pos + 8;
+
+				blk.setNumBytes(NativeIO.readLongTestLong(FSDirectory.nvramAddress, new_offset + new_pos));
+				new_pos = new_pos + 8;
+
+				blk.setGenerationStamp(NativeIO.readLongTestLong(FSDirectory.nvramAddress, new_offset + new_pos));
+				new_pos = new_pos + 8;
+//				ByteBuffer block = ByteBuffer.wrap(NativeIO.readBlockChunkTest(FSDirectory.nvramAddress, new_offset + new_pos));
+//				blk.setBlockId(block.getLong());
+//				blk.setNumBytes(block.getLong());
+//				blk.setGenerationStamp(block.getLong());
+//				new_pos = new_pos + 24;
+				blocks[i] = new BlockInfoContiguous(blk, blockReplication);
+
+			}
+			file = new INodeFile(inodeId, name, perm, modificationTime, accessTime, blocks, blockReplication, preferredBlockSize,
+					(byte)0);
+			//HdfsConstants.HOT_STORAGE_POLICY_ID
+			if (writeUnderConstruction == 1) {
+				file.toUnderConstruction(clientName, clientMachine);
+			}
+		}
+//		file.pos = new_pos;
+		return file;
+	}
   
 	static INodeDirectory readINodeDir(int new_offset, int pos) throws IOException {
 
@@ -469,6 +573,26 @@ public class FSImageSerialization {
 
 		INodeDirectory dir = new INodeDirectory(inodeId, name, perm, mtime);
 		dir.pos = perm.pos;
+
+		return dir;
+	}
+	
+	static INodeDirectory readINodeDir(long new_offset, long pos) throws IOException {
+
+		byte[] name = NativeIO.readIntBATestLong(FSDirectory.nvramAddress, new_offset + pos);
+		long new_pos = pos + 304;
+
+		//long inodeId = NativeIO.readLongFromNVRAM(4096, new_offset, new_pos);
+		long inodeId = NativeIO.readLongTestLong(FSDirectory.nvramAddress, new_offset + new_pos);
+		new_pos = new_pos + 8;
+		new_pos = new_pos + 8;
+		long mtime = NativeIO.readLongTestLong(FSDirectory.nvramAddress, new_offset + new_pos);
+
+		new_pos = new_pos + 8;
+		PermissionStatus perm = PermissionStatus.read(new_offset, new_pos, FSDirectory.nvramAddress);
+
+		INodeDirectory dir = new INodeDirectory(inodeId, name, perm, mtime);
+		dir.pos2 = perm.pos2;
 
 		return dir;
 	}
